@@ -186,7 +186,9 @@ cd testing
 
 The TIFF output contains a `Software` tag and a timestamp, so two runs are
 not necessarily byte-identical. Compare the pixel values (for example with
-`gdalinfo -checksum` or Pillow) when you compare results between platforms.
+`gdalinfo -checksum` or the bundled `testing/compare_outputs.py` script) when
+you compare results between platforms. `testing/README.md` lists the expected
+class counts for the test image.
 
 ## Command line
 
