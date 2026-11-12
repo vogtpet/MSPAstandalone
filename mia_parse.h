@@ -149,7 +149,7 @@ extern "C"
   int parse_init( ParseArg* atom );
   int parse_free( ParseArg* atom );
   int parse_load( int Narg, int argc, char *argv[], ParseArg* atom );
-  int parse_parameter( int argc, char *argv[], int (*parsers[])(), int nparse );
+  int parse_parameter( int argc, char *argv[], int (*parsers[])(int, ParseArg*), int nparse );
 
 #ifdef __cplusplus
 }

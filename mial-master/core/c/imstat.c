@@ -1234,7 +1234,7 @@ ERROR_TYPE uc_lookup(IMAGE *im, IMAGE *imlut)
   for(i=0;i<npix;i++){
     if(p[i]>maxlutidx)
       (void)sprintf(buf,"warning: lookup(): LUT not matching image values\n");
-    else if (lut[p[i]]>PIX_MAX){
+    else if ((double)lut[p[i]] > (double)PIX_MAX){
       (void)sprintf(buf,"warning: lookup(): LUT value greater than PIX_MAX value (output set to PIX_MAX)\n");
       p[i]=PIX_MAX;
     }
@@ -1267,7 +1267,7 @@ ERROR_TYPE us_lookup(IMAGE *im, IMAGE *imlut)
   for(i=0;i<npix;i++){
     if(p[i]>maxlutidx)
       (void)sprintf(buf,"warning: lookup(): LUT not matching image values\n");
-    else if (lut[p[i]]>PIX_MAX){
+    else if ((double)lut[p[i]] > (double)PIX_MAX){
       (void)sprintf(buf,"warning: lookup(): LUT value greater than PIX_MAX value (output set to PIX_MAX)\n");
       p[i]=PIX_MAX;
     }
@@ -1300,7 +1300,7 @@ ERROR_TYPE u32_lookup(IMAGE *im, IMAGE *imlut)
   for(i=0;i<npix;i++){
     if(p[i]>maxlutidx)
       (void)sprintf(buf,"warning: lookup(): LUT not matching image values\n");
-    else if (lut[p[i]]>PIX_MAX){
+    else if ((double)lut[p[i]] > (double)PIX_MAX){
       (void)sprintf(buf,"warning: lookup(): LUT value greater than PIX_MAX value (output set to PIX_MAX)\n");
       p[i]=PIX_MAX;
     }

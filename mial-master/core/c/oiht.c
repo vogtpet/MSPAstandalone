@@ -1596,7 +1596,7 @@ int uc_ronsetest4LPE(IMAGE *pm1, IMAGE *pmsimple, int pix1, IMAGE *pmlabel, IMAG
       }
       else{
 	for( j=0;j<4;j++){
-	  if( ( ppm1[i+neighbours[j]] == 0 )){
+	  if( ppm1[i+neighbours[j]] == 0 ){
 	    if (ppmNG[i + neighbours[j]] > maxmin)
 	      maxmin=ppmNG[i + neighbours[j]];
 	    if ( ppmlabel[i + neighbours[j]] != label){
@@ -1663,7 +1663,7 @@ int us_ronsetest4LPE(IMAGE *pm1, IMAGE *pmsimple, int pix1, IMAGE *pmlabel, IMAG
       }
       else{
 	for( j=0;j<4;j++){
-	  if( ( ppm1[i+neighbours[j]] == 0 )){
+	  if( ppm1[i+neighbours[j]] == 0 ){
 	    if (ppmNG[i + neighbours[j]] > maxmin)
 	      maxmin=ppmNG[i + neighbours[j]];
 	    if ( ppmlabel[i + neighbours[j]] != label){

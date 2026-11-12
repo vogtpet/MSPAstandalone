@@ -54,6 +54,9 @@ ifneq ($(IS_CLANG),)
     # Fix: Native LLVM Clang (MSYS2 ARM64) uses standard -fopenmp for compiling,
     # but uses -lomp for the linking phase.
     CFLAGS += -DOPENMP -fopenmp
+    # Upstream miallib uses old-style (K&R) function definitions. They are
+    # valid C99 but Clang warns about them; silence that specific warning.
+    CFLAGS += -Wno-deprecated-non-prototype
     LDFLAGS += -lomp
 else
     # Linux/macOS/Windows GCC OpenMP syntax

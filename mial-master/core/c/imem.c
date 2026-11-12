@@ -630,7 +630,7 @@ ERROR_TYPE setpixval(IMAGE *im, unsigned long offset, G_TYPE g)
 */
 G_TYPE getpixval(IMAGE *im, unsigned long offset)
 {
-  G_TYPE g;
+  G_TYPE g = {0};   /* initialised: the default branch returns this value */
 
   switch(GetImDataType(im)){
   case t_UCHAR:

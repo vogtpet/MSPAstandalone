@@ -3137,8 +3137,8 @@ IMAGE **uc_rotatecoor(IMAGE *im, double theta)
   ymin=MIN(0.0,MIN(urc_y,MIN(llc_y,lrc_y)));
   ymax=MAX(0.0,MAX(urc_y,MAX(llc_x,lrc_y)));
 
-  nxp=(int)round(abs(xmax-xmin))+1;
-  nyp=(int)round(abs(ymax-ymin))+1;
+  nxp=(int)round(fabs(xmax-xmin))+1;
+  nyp=(int)round(fabs(ymax-ymin))+1;
 
   imout=(IMAGE **)calloc(sizeof(IMAGE *), 2);
   imx=create_image(t_FLOAT, nxp, nyp, 1);
@@ -3195,8 +3195,8 @@ IMAGE **us_rotatecoor(IMAGE *im, double theta)
   ymin=MIN(0.0,MIN(urc_y,MIN(llc_y,lrc_y)));
   ymax=MAX(0.0,MAX(urc_y,MAX(llc_x,lrc_y)));
 
-  nxp=(int)round(abs(xmax-xmin))+1;
-  nyp=(int)round(abs(ymax-ymin))+1;
+  nxp=(int)round(fabs(xmax-xmin))+1;
+  nyp=(int)round(fabs(ymax-ymin))+1;
 
   imout=(IMAGE **)calloc(sizeof(IMAGE *), 2);
   imx=create_image(t_FLOAT, nxp, nyp, 1);
