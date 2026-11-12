@@ -28,7 +28,7 @@ and the GuidosToolbox Workbench.
 |---------------|-----------------------------|------------|-------------------------------|
 | `Linux`       | Linux (glibc, e.g. Debian 13) | x86_64   | GCC (distribution packages)   |
 | `Linux_ARM`   | Linux (glibc, e.g. Debian 13) | aarch64  | GCC (distribution packages)   |
-| `macOS_ARM`   | macOS (Apple Silicon)       | Apple Silicon | Homebrew GCC (`gcc-16`)    |
+| `macOS_ARM`   | macOS (Apple Silicon)       | Apple Silicon | Homebrew GCC (auto-detected) |
 | `Windows`     | Windows 10/11               | x86_64     | MSYS2 UCRT64 (GCC)            |
 | `Windows_ARM` | Windows 11                  | ARM64      | MSYS2 CLANGARM64 (Clang)      |
 
@@ -66,7 +66,10 @@ LICENSE                 GNU General Public License v3
 
 All targets are built with a single script. The script has to be run from a
 bash shell (Linux, macOS, MSYS2) and needs `make`, a C compiler and the
-platform libraries listed below.
+platform libraries listed below. It refuses to build a target that does not
+match the host operating system and CPU architecture, because the makefiles
+do not cross-compile. The compiler can be overridden with `MSPA_CC=<compiler>`;
+on macOS the installed Homebrew GCC is detected automatically.
 
 ### Linux x86_64 and Linux aarch64
 
@@ -156,11 +159,12 @@ Then run:
 ./deploy.sh macOS_ARM
 ```
 
-The makefile and `deploy.sh` use `gcc-16` (the current Homebrew GCC). If you
-have a different GCC version, pass it explicitly:
+The installed Homebrew GCC is detected automatically (the newest version if
+several are installed), so the build keeps working after a GCC upgrade. To
+select a specific compiler, set `MSPA_CC`:
 
 ```sh
-MSPA_CC=gcc-15 ./deploy.sh macOS_ARM
+MSPA_CC=/opt/homebrew/bin/gcc-15 ./deploy.sh macOS_ARM
 ```
 
 `deploy.sh` bundles the two remaining dynamic libraries (`libdeflate` and
@@ -170,13 +174,15 @@ Homebrew.
 
 ## What `deploy.sh` does
 
-1. builds the static library `libmiallib_mspa.a` from `mial-master/core/c`;
-2. compiles the MSPA driver with the platform makefile;
-3. creates `mspa_dist_<target>/` and copies the executable;
-4. on macOS, bundles and re-signs the dynamic libraries;
-5. runs the test image `testing/input.tif` twice (default parameters and
-   `-graphfg 4 -internal 0`) and checks that both output files were created;
-6. removes the intermediate object files and the static library.
+1. checks that the requested target matches the host OS and CPU architecture;
+2. builds the static library `libmiallib_mspa.a` from `mial-master/core/c`;
+3. compiles the MSPA driver with the platform makefile;
+4. creates `mspa_dist_<target>/` and copies the executable;
+5. on macOS, bundles and re-signs the dynamic libraries;
+6. runs the test image `testing/input.tif` twice (default parameters and
+   `-graphfg 4 -internal 0`) and compares both outputs pixel by pixel with
+   the reference images;
+7. removes the intermediate object files and the static library.
 
 If any step fails, the script stops with a non-zero exit status.
 

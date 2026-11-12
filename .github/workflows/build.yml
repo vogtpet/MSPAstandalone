@@ -86,8 +86,6 @@ jobs:
         run: |
           brew install gcc liblerc libdeflate libtiff jpeg-turbo \
             libpng webp jbigkit zstd xz
-          gcc_major="$(brew list --versions gcc | awk '{print $2}' | cut -d. -f1)"
-          echo "MSPA_CC=gcc-${gcc_major}" >> "$GITHUB_ENV"
 
       - name: Set up MSYS2
         if: runner.os == 'Windows'

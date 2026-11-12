@@ -30,6 +30,9 @@ Targets:
   macOS_ARM     macOS on Apple Silicon (Homebrew GCC)
   Windows       MS-Windows x86_64 (MSYS2 UCRT64)
   Windows_ARM   MS-Windows ARM64 (MSYS2 CLANGARM64)
+
+The target must match the host operating system and CPU architecture
+(the makefiles do not cross-compile).
 EOF
 }
 
@@ -43,25 +46,29 @@ MAKEFILE=""
 BINARY_NAME=""
 DIST_DIR=""
 IS_MAC=false
-LIB_CC="${MSPA_CC:-gcc}"
+LIB_CC="${MSPA_CC:-}"
 EXTRA_CFLAGS=""
 
 case "$target" in
     "Linux")
         MAKEFILE="Makefile_Linux";        BINARY_NAME="mspa_linux";         DIST_DIR="mspa_dist_linux"
+        LIB_CC="${MSPA_CC:-gcc}"
         ;;
     "Linux_ARM")
         MAKEFILE="Makefile_Linux_ARM";    BINARY_NAME="mspa_linux_ARM";     DIST_DIR="mspa_dist_linux_ARM"
+        LIB_CC="${MSPA_CC:-gcc}"
         ;;
     "macOS_ARM")
         MAKEFILE="Makefile_macOS_ARM";    BINARY_NAME="mspa_macOS_ARM";     DIST_DIR="mspa_dist_macOS_ARM"
-        IS_MAC=true; LIB_CC="${MSPA_CC:-gcc-16}"
+        IS_MAC=true
         ;;
     "Windows")
         MAKEFILE="Makefile_Windows";      BINARY_NAME="mspa_win64.exe";     DIST_DIR="mspa_dist_windows"
+        LIB_CC="${MSPA_CC:-gcc}"
         ;;
     "Windows_ARM")
         MAKEFILE="Makefile_Windows_ARM";  BINARY_NAME="mspa_win64_ARM.exe"; DIST_DIR="mspa_dist_windows_ARM"
+        LIB_CC="${MSPA_CC:-gcc}"
         ;;
     *)
         echo "Unknown target: $target"
@@ -69,6 +76,75 @@ case "$target" in
         exit 1
         ;;
 esac
+
+# --- Host / target compatibility -------------------------------------------
+# The makefiles do not cross-compile: a target must be built on the platform
+# it is meant for. Without this check, for example ./deploy.sh Linux_ARM on
+# an x86_64 host would silently produce an x86_64 binary called
+# mspa_linux_ARM.
+target_os() {
+    case "$1" in
+        Linux|Linux_ARM)     echo "Linux" ;;
+        macOS_ARM)           echo "macOS" ;;
+        Windows|Windows_ARM) echo "Windows" ;;
+    esac
+}
+
+target_arch() {
+    case "$1" in
+        Linux|Windows) echo "x86_64" ;;
+        *)             echo "arm64" ;;
+    esac
+}
+
+host_os="$(uname -s 2>/dev/null || echo unknown)"
+case "$host_os" in
+    Linux*)               host_os="Linux" ;;
+    Darwin*)              host_os="macOS" ;;
+    MINGW*|MSYS*|CYGWIN*) host_os="Windows" ;;
+esac
+
+host_arch="$(uname -m 2>/dev/null || echo unknown)"
+case "$host_arch" in
+    x86_64|amd64)  host_arch="x86_64" ;;
+    arm64|aarch64) host_arch="arm64" ;;
+esac
+
+# In MSYS2, $MSYSTEM identifies the environment more reliably than uname
+if [ "$host_os" = "Windows" ]; then
+    case "${MSYSTEM:-}" in
+        CLANGARM64)                  host_arch="arm64" ;;
+        UCRT64|MINGW64|CLANG64|MSYS) host_arch="x86_64" ;;
+    esac
+fi
+
+want_os="$(target_os "$target")"
+want_arch="$(target_arch "$target")"
+
+if [ "$host_os" != "$want_os" ] || [ "$host_arch" != "$want_arch" ]; then
+    echo "ERROR: target '$target' must be built on $want_os/$want_arch,"
+    echo "       but this machine is $host_os/$host_arch."
+    echo
+
+    if [ "$host_os/$host_arch" = "macOS/x86_64" ]; then
+        echo "This machine (macOS/x86_64) has no supported target:"
+        echo "macOS on Intel is no longer supported. Use an Apple Silicon Mac"
+        echo "for the macOS_ARM target."
+    else
+        echo "Targets that match this machine:"
+        found=false
+        for candidate in Linux Linux_ARM macOS_ARM Windows Windows_ARM; do
+            if [ "$(target_os "$candidate")/$(target_arch "$candidate")" = "$host_os/$host_arch" ]; then
+                echo "  ./deploy.sh $candidate"
+                found=true
+            fi
+        done
+        if [ "$found" = false ]; then
+            echo "  (none: this platform/architecture is not supported)"
+        fi
+    fi
+    exit 1
+fi
 
 if [ ! -f "$MAKEFILE" ]; then
     echo "ERROR: $MAKEFILE not found in $base_dir"
@@ -88,6 +164,7 @@ case "$jobs" in
 esac
 
 echo "==> Target:          $target"
+echo "==> Host:            $host_os/$host_arch"
 echo "==> Base directory:  $base_dir"
 echo "==> Distribution:    $DIST_DIR/"
 
@@ -98,8 +175,32 @@ if [ "$IS_MAC" = true ]; then
     fi
     BREW_PREFIX="$(brew --prefix)"
     EXTRA_CFLAGS="-I$BREW_PREFIX/include"
-    if ! command -v "$LIB_CC" >/dev/null 2>&1; then
-        echo "ERROR: compiler $LIB_CC not found. Run: brew install gcc"
+
+    if [ -z "$LIB_CC" ]; then
+        # Use whichever Homebrew GCC is installed; no version is hardcoded.
+        gcc_version="$(brew list --versions gcc 2>/dev/null | awk 'NR==1 {print $2}' || true)"
+        gcc_major="${gcc_version%%.*}"
+        if [ -n "$gcc_major" ] && [ -x "$BREW_PREFIX/bin/gcc-$gcc_major" ]; then
+            LIB_CC="$BREW_PREFIX/bin/gcc-$gcc_major"
+        else
+            # Fallback: pick the highest gcc-N in the Homebrew bin directory
+            best_major=""
+            for candidate in "$BREW_PREFIX"/bin/gcc-[0-9]*; do
+                [ -x "$candidate" ] || continue
+                major="${candidate##*/gcc-}"
+                case "$major" in
+                    ''|*[!0-9]*) continue ;;
+                esac
+                if [ -z "$best_major" ] || [ "$major" -gt "$best_major" ]; then
+                    best_major="$major"
+                    LIB_CC="$candidate"
+                fi
+            done
+        fi
+    fi
+
+    if [ -z "$LIB_CC" ] || ! command -v "$LIB_CC" >/dev/null 2>&1; then
+        echo "ERROR: no Homebrew GCC found (brew install gcc), or MSPA_CC does not name a compiler."
         exit 1
     fi
     echo "==> Homebrew:        $BREW_PREFIX"
@@ -109,6 +210,9 @@ if ! command -v "$LIB_CC" >/dev/null 2>&1; then
     echo "ERROR: compiler $LIB_CC not found."
     exit 1
 fi
+
+cc_version="$("$LIB_CC" --version 2>/dev/null | head -n 1 || true)"
+echo "==> C compiler:      $LIB_CC${cc_version:+ ($cc_version)}"
 
 # 1. Build the static miallib library and copy it next to this script
 echo "==> Building libmiallib_mspa.a with $LIB_CC"
@@ -130,6 +234,22 @@ make -f "$MAKEFILE" CC="$LIB_CC"
 if [ ! -f "$BINARY_NAME" ]; then
     echo "ERROR: $BINARY_NAME was not created."
     exit 1
+fi
+
+# Second line of defence: the host check above already rejects an impossible
+# target, but a misconfigured compiler (e.g. an Intel GCC under Rosetta on an
+# Apple Silicon Mac) could still produce a binary for the wrong CPU.
+if command -v file >/dev/null 2>&1; then
+    case "$target" in
+        Linux|Windows) arch_pattern="x86-64" ;;
+        *)             arch_pattern="aarch64|arm64" ;;
+    esac
+    if ! file "$BINARY_NAME" | grep -Eqi "$arch_pattern"; then
+        echo "ERROR: $BINARY_NAME was built for the wrong CPU architecture:"
+        file "$BINARY_NAME"
+        echo "Expected $want_arch (matching '$arch_pattern')."
+        exit 1
+    fi
 fi
 
 # 3. Create the distribution directory
