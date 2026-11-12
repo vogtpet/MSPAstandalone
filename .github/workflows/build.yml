@@ -29,6 +29,7 @@ jobs:
             msystem: UCRT64
             msys2_release: false
             msys2_packages: >-
+              base-devel
               mingw-w64-ucrt-x86_64-toolchain
               mingw-w64-ucrt-x86_64-gcc
               mingw-w64-ucrt-x86_64-gcc-libs
@@ -48,6 +49,7 @@ jobs:
             msystem: CLANGARM64
             msys2_release: true
             msys2_packages: >-
+              base-devel
               mingw-w64-clang-aarch64-clang
               mingw-w64-clang-aarch64-openmp
               mingw-w64-clang-aarch64-toolchain
@@ -99,11 +101,11 @@ jobs:
       - name: Build and test (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
-        run: ./deploy.sh ${{ matrix.target }}
+        run: bash ./deploy.sh ${{ matrix.target }}
 
       - name: Build and test (Linux and macOS)
         if: runner.os != 'Windows'
-        run: ./deploy.sh ${{ matrix.target }}
+        run: bash ./deploy.sh ${{ matrix.target }}
 
       - name: Upload the standalone binary
         uses: actions/upload-artifact@v4
