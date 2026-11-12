@@ -1,0 +1,48 @@
+# ---------------------------------------------------------------------------
+# Build outputs
+# ---------------------------------------------------------------------------
+*.o
+fsp
+fsp.exe
+libmiallib_mspa.a
+
+mspa_linux
+mspa_linux_ARM
+mspa_macOS_ARM
+mspa_win64.exe
+mspa_win64_ARM.exe
+
+mspa_dist_*/
+mspa_dist_*/*
+
+# miallib build tree and generated files
+mial-master/core/build/
+mial-master/xlisp/build/
+mial-master/core/c/banner.h
+mial-master/xlisp/c/banner_mialib.h
+
+# Files ignored by the upstream miallib project (not part of this build)
+mial-master/core/c/alloc.c
+mial-master/core/c/alloc.h
+mial-master/core/c/cluster.c
+mial-master/core/c/cluster.h
+mial-master/core/c/error.c
+mial-master/core/c/error.h
+mial-master/core/c/graph.c
+
+# ---------------------------------------------------------------------------
+# Test run artifacts (the test image testing/input.tif is tracked)
+# ---------------------------------------------------------------------------
+testing/mspa_*
+testing/*.dylib
+testing/*.dll
+testing/output*.tif
+testing/output_nondefault.tif
+
+# ---------------------------------------------------------------------------
+# Editor / OS files
+# ---------------------------------------------------------------------------
+.DS_Store
+._*
+*.swp
+*~
