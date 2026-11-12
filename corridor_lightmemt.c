@@ -23,13 +23,114 @@ along with miallib.  If not, see <https://www.gnu.org/licenses/>.
  *  https://doi.org/10.1016/j.patrec.2008.10.015
  *  @author Pierre Soille and Peter Vogt
  *  Version 2.4, October 2026
+ *
+ *  This file contains the MSPA driver. It is the file referred to as fsp.c
+ *  in the MSPA/GTB/GWB documentation and in the build instructions; the
+ *  legacy file name corridor_lightmemt.c is kept for compatibility.
  */
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 #include "miallib.h"
 #include "op.h"
+
+#ifdef _WIN32
+#include <process.h>
+#define mspa_getpid() ((long)_getpid())
+#else
+#include <unistd.h>
+#define mspa_getpid() ((long)getpid())
+#endif
+
+#ifndef MSPA_PATH_MAX
+#define MSPA_PATH_MAX 4096
+#endif
+
+/* Internal images that are spooled through the file system when the
+ * -disk mode is used (and the hole mask needed for -internal 1).
+ * They are written next to the output image (so that -odir is honoured
+ * and a read-only working directory is fine) and their names contain
+ * the process id, so concurrent runs do not overwrite each other. */
+enum {
+  MSPA_TMP_ALLHOLES = 0,
+  MSPA_TMP_DISK_CORE1,
+  MSPA_TMP_DISK_OUT,
+  MSPA_TMP_DISK_PATCH,
+  MSPA_TMP_DISK_OPEN,
+  MSPA_TMP_DISK_CORE,
+  MSPA_TMP_DISK_RESID,
+  MSPA_TMP_COUNT
+};
+
+static const char *mspa_tmp_tag[MSPA_TMP_COUNT] = {
+  "allholes", "core1", "out", "patch", "opening", "core", "residues"
+};
+
+static char mspa_tmp_path[MSPA_TMP_COUNT][MSPA_PATH_MAX];
+
+static void mspa_tmp_cleanup(void)
+{
+  int i;
+
+  for(i = 0; i < MSPA_TMP_COUNT; i++)
+    if(mspa_tmp_path[i][0] != '\0')
+      (void)remove(mspa_tmp_path[i]);
+}
+
+static void mspa_tmp_init(const char *outpath)
+{
+  char dir[MSPA_PATH_MAX] = ".";
+  const char *s;
+#ifdef _WIN32
+  const char *s2;
+#endif
+  int i;
+
+  if(outpath != NULL){
+    s = strrchr(outpath, '/');
+#ifdef _WIN32
+    s2 = strrchr(outpath, '\\');
+    if((s2 != NULL) && ((s == NULL) || (s2 > s)))
+      s = s2;
+#endif
+    if(s != NULL){
+      size_t len = (size_t)(s - outpath);
+      if(len == 0){            /* output in the root directory */
+	dir[0] = outpath[0];
+	dir[1] = '\0';
+      }
+      else if(len < sizeof(dir)){
+	memcpy(dir, outpath, len);
+	dir[len] = '\0';
+      }
+    }
+  }
+
+  for(i = 0; i < MSPA_TMP_COUNT; i++)
+    snprintf(mspa_tmp_path[i], sizeof(mspa_tmp_path[i]),
+	     "%s/mspa_%ld_%s.tif", dir, mspa_getpid(), mspa_tmp_tag[i]);
+}
+
+/* Read one of the temporary images; abort with a clear message if the
+ * file cannot be read (e.g. disk full or permission problem). */
+static IMAGE *mspa_read_tmp(int slot)
+{
+  IMAGE *im;
+
+  im = (IMAGE *)read_image(mspa_tmp_path[slot]);
+  if(im == NULL){
+    fprintf(stderr,"\nmspa: error: cannot read temporary image '%s'.\n",
+	    mspa_tmp_path[slot]);
+    fprintf(stderr,"mspa: check the free space and the write permissions "
+	    "of the output directory.\n");
+    mspa_tmp_cleanup();
+    exit(ERROR);
+  }
+
+  return im;
+}
 
 extern ERROR_TYPE binOIthin_FIFO(IMAGE *imin, int stype, int atype, IMAGE *imanchor);
 extern IMAGE *ced(IMAGE *ref, IMAGE *mask);
@@ -57,8 +158,14 @@ int edt_counter=0;
 // and we want a bar of width w and resolution r.
 static inline void loadBar(int x, int n, int r, int w)
 {
+    int step;
+
     // Only update r times.
-    if ( x % (n/r) != 0 ) return;
+    if ( (n <= 0) || (r <= 0) || (w <= 0) ) return;
+    if ( r > n ) r = n;
+    step = n / r;
+    if ( step <= 0 ) return;
+    if ( x % step != 0 ) return;
 
     // Calculate the ratio of complete-to-incomplete.
     float ratio = x/(float)n;
@@ -84,7 +191,9 @@ static inline void loadBar(int x, int n, int r, int w)
 IMAGE *getexternalboundary(IMAGE *im, float size, float edu)
 {
   IMAGE *nim, *imsqedt, *edt;
+#ifdef DEBUG
   char aname[256];
+#endif
   int sqedt_type;
 
   nim=(IMAGE *)copy_image(im);
@@ -385,7 +494,9 @@ IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int
   IMAGE *core, *outer, *corefill, *loecher, *edges, *core1;
   IMAGE *crt_edges;
   IMAGE *i0;
+#ifdef DEBUG
   char aname[256];
+#endif
 #if DEBUG
   int counter=0;
 #endif
@@ -393,7 +504,7 @@ IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int
   core=getcore(im, size, edu);
 
   if (disk==1)
-    writeTiffOneStripPerLine(core, "disk_core1.tif", NULL);
+    writeTiffOneStripPerLine(core, mspa_tmp_path[MSPA_TMP_DISK_CORE1], NULL);
   else
     core1=copy_image(core);
 
@@ -414,7 +525,7 @@ IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int
   loadBar(idx, 100, 100, 50);
 
   for(;;){
-#ifdef DEBUG;
+#ifdef DEBUG
     printf("counter = %d\n", counter);
     sprintf(aname, "corefill_counter%d.tif", counter);
     writeTiffOneStripPerLine(corefill, aname, NULL);
@@ -425,7 +536,7 @@ IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int
       break;
     crt_edges=getexternalboundary(corefill, size, edu);
 
-#ifdef DEBUG;
+#ifdef DEBUG
     sprintf(aname, "edges_before_bitwise_counter%d.tif", counter);
     writeTiffOneStripPerLine(edges, aname, NULL);
     sprintf(aname, "crt_edges_before_bitwise_counter%d.tif", counter);
@@ -434,7 +545,7 @@ IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int
     
     bitwise_op(edges, crt_edges, OR_op);
     
-#ifdef DEBUG;
+#ifdef DEBUG
     sprintf(aname, "edges_after_bitwise_counter%d.tif", counter);
     writeTiffOneStripPerLine(edges, aname, NULL);
     sprintf(aname, "crt_edges_after_bitwise_counter%d.tif", counter);
@@ -444,7 +555,7 @@ IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int
     free_image(crt_edges);
     i0=uc_fillhole(loecher, graphfg);
     
-#ifdef DEBUG;
+#ifdef DEBUG
     sprintf(aname, "i0_counter%d.tif", counter);
     writeTiffOneStripPerLine(i0, aname, NULL);
     printf("hello 2 in setedges\n");
@@ -473,7 +584,7 @@ IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int
   iml[0]=edges;
 
   if(disk==1)
-    core1=(IMAGE *)read_image("disk_core1.tif");
+    core1=mspa_read_tmp(MSPA_TMP_DISK_CORE1);
   outer=getexternalboundary(core1, size, edu);
 
   negation(core1);
@@ -544,18 +655,18 @@ IMAGE *getconnector2core(IMAGE *core, IMAGE *opening, IMAGE *residues, \
   IMAGE *sk, *connector, *i0;
 
   if (disk==1)
-    sk=(IMAGE *)read_image("disk_opening.tif");
+    sk=mspa_read_tmp(MSPA_TMP_DISK_OPEN);
   else
     sk=copy_image(opening);
 
   if (disk==1)
-    residues=(IMAGE *)read_image("disk_residues.tif");
+    residues=mspa_read_tmp(MSPA_TMP_DISK_RESID);
   bitwise_op(sk, residues, OR_op);
 
   loadBar(48, 100, 100, 50);
 
   if (disk==1)
-    core=(IMAGE *)read_image("disk_core.tif");
+    core=mspa_read_tmp(MSPA_TMP_DISK_CORE);
   binOIthin_FIFO(sk, oitype, 1, core);
 
   loadBar(80, 100, 100, 50);
@@ -568,7 +679,7 @@ IMAGE *getconnector2core(IMAGE *core, IMAGE *opening, IMAGE *residues, \
   arith(sk, core, SUB_op);
 
   if (disk==1)
-    i0=(IMAGE *)read_image("disk_opening.tif");
+    i0=mspa_read_tmp(MSPA_TMP_DISK_OPEN);
   else
     i0=copy_image(opening);
 
@@ -659,7 +770,7 @@ IMAGE *getcorridor(IMAGE *connector, IMAGE *core, IMAGE *opening, \
   return cor;
 }
 
-void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk, int transition, int internal)
+int fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk, int transition, int internal)
 {
   IMAGE *im, *i0, *core, *patch;
   IMAGE *allHoles, *coreHoles;
@@ -673,8 +784,13 @@ void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk
   int graphbg, oitype;
   char desc[512];
   int bufsize;
+  int status = NO_ERROR;
 
-  sprintf(desc, "\nBased on Morphological Segmentation of Binary Patterns\n"
+  /* Temporary files are created next to the output image */
+  mspa_tmp_init(fnout);
+
+  snprintf(desc, sizeof(desc),
+	  "\nBased on Morphological Segmentation of Binary Patterns\n"
 	  "by Pierre Soille and Peter Vogt\n"
 	  "URL: http://dx.doi.org/10.1016/j.patrec.2008.10.015\n"
 	  "See also: https://doi.org/10.5194/isprs-archives-XLVIII-4-W1-2022-427-2022\n" 
@@ -695,6 +811,10 @@ void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk
     transition=0;
 
   im=(IMAGE *)read_image(fnin);
+  if(im == NULL){
+    fprintf(stderr,"mspa: error: cannot read input image '%s'.\n", fnin);
+    return ERROR;
+  }
   loadBar(1, 100, 100, 50);
   // (setq bufsize (truncate (+ 0.5 (* size 1.5))))
   // (@fm_frame_in im bufsize)
@@ -709,7 +829,7 @@ void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk
     i0=fm_preproc(im, 1, edu); 
     allHoles=uc_fillhole(i0, graphbg);
     arith(allHoles, i0, SUB_op);
-    writeTiffOneStripPerLine(allHoles, "allHoles.tif", NULL);
+    writeTiffOneStripPerLine(allHoles, mspa_tmp_path[MSPA_TMP_ALLHOLES], NULL);
     free_image(allHoles);
   }
     
@@ -779,13 +899,13 @@ void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk
   // (setq perforation (cadr iml))
 
   if (disk==1){
-    writeTiffOneStripPerLine(out, "disk_out.tif", NULL);
+    writeTiffOneStripPerLine(out, mspa_tmp_path[MSPA_TMP_DISK_OUT], NULL);
     free_image(out);
-    writeTiffOneStripPerLine(patch, "disk_patch.tif", NULL);
+    writeTiffOneStripPerLine(patch, mspa_tmp_path[MSPA_TMP_DISK_PATCH], NULL);
     free_image(patch);
-    writeTiffOneStripPerLine(opening, "disk_opening.tif", NULL);
+    writeTiffOneStripPerLine(opening, mspa_tmp_path[MSPA_TMP_DISK_OPEN], NULL);
     free_image(opening);
-    writeTiffOneStripPerLine(core, "disk_core.tif", NULL);
+    writeTiffOneStripPerLine(core, mspa_tmp_path[MSPA_TMP_DISK_CORE], NULL);
     free_image(core);
   }
 
@@ -806,14 +926,14 @@ void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk
   residues=i0;
 
   if (disk==1){
-    out=(IMAGE *)read_image("disk_out.tif");
-    patch=(IMAGE *)read_image("disk_patch.tif");
-    opening=(IMAGE *)read_image("disk_opening.tif");
-    core=(IMAGE *)read_image("disk_core.tif");
+    out=mspa_read_tmp(MSPA_TMP_DISK_OUT);
+    patch=mspa_read_tmp(MSPA_TMP_DISK_PATCH);
+    opening=mspa_read_tmp(MSPA_TMP_DISK_OPEN);
+    core=mspa_read_tmp(MSPA_TMP_DISK_CORE);
 #ifndef DEBUG
-    remove("disk_out.tif");
-    remove("disk_patch.tif");
-    remove("disk_core1.tif");
+    remove(mspa_tmp_path[MSPA_TMP_DISK_OUT]);
+    remove(mspa_tmp_path[MSPA_TMP_DISK_PATCH]);
+    remove(mspa_tmp_path[MSPA_TMP_DISK_CORE1]);
 #endif
   }
 
@@ -868,13 +988,13 @@ void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk
   //  )
 
   if (disk==1){
-    writeTiffOneStripPerLine(out, "disk_out.tif", NULL);
+    writeTiffOneStripPerLine(out, mspa_tmp_path[MSPA_TMP_DISK_OUT], NULL);
     free_image(out);
-    // writeTiffOneStripPerLine(core, "disk_core.tif", NULL);
+    // writeTiffOneStripPerLine(core, mspa_tmp_path[MSPA_TMP_DISK_CORE], NULL);
     free_image(core);
-    // writeTiffOneStripPerLine(opening, "disk_opening.tif", NULL);
+    // writeTiffOneStripPerLine(opening, mspa_tmp_path[MSPA_TMP_DISK_OPEN], NULL);
     free_image(opening);
-    writeTiffOneStripPerLine(residues, "disk_residues.tif", NULL);
+    writeTiffOneStripPerLine(residues, mspa_tmp_path[MSPA_TMP_DISK_RESID], NULL);
     free_image(residues);
   }
 
@@ -885,16 +1005,16 @@ void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk
     free_image(residues);
 
   if (disk==1){
-    out=(IMAGE *)read_image("disk_out.tif");
-    core=(IMAGE *)read_image("disk_core.tif");
-    opening=(IMAGE *)read_image("disk_opening.tif");
+    out=mspa_read_tmp(MSPA_TMP_DISK_OUT);
+    core=mspa_read_tmp(MSPA_TMP_DISK_CORE);
+    opening=mspa_read_tmp(MSPA_TMP_DISK_OPEN);
     if (size==1)
-      residues=(IMAGE *)read_image("disk_residues.tif");
+      residues=mspa_read_tmp(MSPA_TMP_DISK_RESID);
 #ifndef DEBUG
-    remove("disk_out.tif");
-    remove("disk_core.tif");
-    remove("disk_opening.tif");
-    remove("disk_residues.tif");
+    remove(mspa_tmp_path[MSPA_TMP_DISK_OUT]);
+    remove(mspa_tmp_path[MSPA_TMP_DISK_CORE]);
+    remove(mspa_tmp_path[MSPA_TMP_DISK_OPEN]);
+    remove(mspa_tmp_path[MSPA_TMP_DISK_RESID]);
 #endif
   }
 
@@ -968,9 +1088,9 @@ void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk
     tmp=uc_fillhole(core, graphbg);
 
     //if (disk==1){
-      allHoles=(IMAGE *)read_image("allHoles.tif");
+      allHoles=mspa_read_tmp(MSPA_TMP_ALLHOLES);
 #ifndef DEBUG
-      remove("allHoles.tif");
+      remove(mspa_tmp_path[MSPA_TMP_ALLHOLES]);
 #endif
     //}
     coreHoles=copy_image(tmp);
@@ -1179,15 +1299,27 @@ void fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk
   subframebox(out, box);
 
   im=(IMAGE *)read_image(fnin);
+  if(im == NULL){
+    fprintf(stderr,"mspa: error: cannot read input image '%s'.\n", fnin);
+    mspa_tmp_cleanup();
+    return ERROR;
+  }
   generic_thresh(im, 1, 255, 129, 0);
   arith(out, im, MASK_op);
   free_image(im);
 
-  writeTiffOneStripPerLine(out, fnout, desc);
+  if(writeTiffOneStripPerLine(out, fnout, desc) != NO_ERROR){
+    fprintf(stderr,"mspa: error: cannot write output image '%s'.\n", fnout);
+    status = ERROR;
+  }
   loadBar(100, 100, 100, 50);
 
   printf(" \n");
 
-  exit(0);
+#ifndef DEBUG
+  mspa_tmp_cleanup();
+#endif
+
+  return status;
 }
 
