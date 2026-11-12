@@ -233,7 +233,7 @@ respective library packages.
 
 * miallib (JRC, GPL-3.0-or-later) – image processing library
 * libtiff (libtiff licence), libjpeg-turbo (BSD/IJG), libpng (libpng licence),
-  libwebp (BSD), jbigkit (GPL-2.0), zlib (zlib licence), zstd (BSD/GPL-2.0),
+  libwebp (BSD), jbigkit (GPL-2.0-or-later), zlib (zlib licence), zstd (BSD/GPL-2.0),
   xz/liblzma (public domain), libdeflate (MIT), Lerc (Apache-2.0)
 
 ## Upstream modifications
