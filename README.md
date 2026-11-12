@@ -51,10 +51,13 @@ deploy.sh               builds the library, the binary and the distribution
 corridor_lightmemt.c    MSPA driver (legacy name; referred to as fsp.c)
 frag.c / frag.h         command line handling
 mia_parse.c / .h        generic argument parser
-miallib.h, mialtypes.h, op.h, config_miallib.h
-                        public miallib headers (copies of mial-master/core/c)
-mial-master/            miallib source code (see "Upstream modifications")
+mial-master/            miallib source code and public headers
+                        (the driver includes them directly; see
+                        "Upstream modifications")
 testing/input.tif       test image used by the automatic smoke test
+testing/reference*.tif  expected pixel output (checked by deploy.sh)
+testing/tiffcmp.c       libtiff based pixel comparison tool
+.github/workflows/      CI build matrix (five targets)
 ReadmeCompile.docx      detailed build instructions (Word document)
 LICENSE                 GNU General Public License v3
 ```
@@ -179,18 +182,42 @@ If any step fails, the script stops with a non-zero exit status.
 
 ## Testing
 
-The smoke test in `deploy.sh` is also a convenient way to check a build:
+`deploy.sh` runs two test cases and compares both results pixel by pixel with
+the reference images in `testing/`:
 
 ```sh
-cd testing
-./mspa_macOS_ARM -i input.tif -o output.tif -odir ./
+./deploy.sh macOS_ARM
+# ... builds and runs:
+#   mspa -i input.tif -o output.tif -odir ./
+#   mspa -i input.tif -o output_nondefault.tif -odir ./ -graphfg 4 -internal 0
+# ... then verifies output*.tif against testing/reference*.tif
 ```
 
-The TIFF output contains a `Software` tag and a timestamp, so two runs are
-not necessarily byte-identical. Compare the pixel values (for example with
-`gdalinfo -checksum` or the bundled `testing/compare_outputs.py` script) when
-you compare results between platforms. `testing/README.md` lists the expected
-class counts for the test image.
+The comparison uses `testing/tiffcmp.c`, a small tool built against libtiff
+(no Python, GDAL or ImageMagick needed). It fails the build if a single pixel
+differs. Set `MSPA_SKIP_VERIFY=1` to skip this check, for example while
+experimenting with a modified algorithm.
+
+The TIFF output contains a `Software` tag and a timestamp, so two runs are not
+byte-identical; only the pixel values are compared. `testing/compare_outputs.py`
+is an alternative comparison script (requires Pillow), and
+`testing/README.md` lists the expected class counts for the test image.
+
+## Continuous integration
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) builds and tests
+all five targets on GitHub-hosted runners and uploads each distribution
+directory as a workflow artifact:
+
+| Job | Runner |
+|-----|--------|
+| `Linux` | `ubuntu-24.04` |
+| `Linux_ARM` | `ubuntu-24.04-arm` |
+| `Windows` | `windows-2025` (MSYS2 UCRT64) |
+| `Windows_ARM` | `windows-11-arm` (MSYS2 CLANGARM64) |
+| `macOS_ARM` | `macos-14` (Apple Silicon) |
+
+All ARM jobs run natively, so the CI results are not affected by emulation.
 
 ## Command line
 

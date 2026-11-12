@@ -14,17 +14,23 @@ Both output files are written to this directory and are ignored by git.
 
 The TIFF writer stores a timestamp and the software version, so two runs are
 not necessarily byte-identical even when the pixel data is identical. Compare
-the pixel values instead, for example with GDAL:
+the pixel values instead.
+
+`deploy.sh` does this automatically: it compiles `tiffcmp.c` with libtiff and
+compares the two test outputs with `reference.tif` and
+`reference_nondefault.tif`. The build fails on the first differing pixel.
+Set `MSPA_SKIP_VERIFY=1` to skip the comparison.
+
+The same check can be run manually:
 
 ```sh
-gdalinfo -checksum output.tif
+cc -O2 -o tiffcmp tiffcmp.c -ltiff -lm
+./tiffcmp reference.tif output.tif
 ```
 
-or with the helper script (requires Pillow):
-
-```sh
-python3 compare_outputs.py output_linux.tif output_macos_arm.tif
-```
+`compare_outputs.py` is an alternative (requires Pillow), and GDAL can be used
+with `gdalinfo -checksum`. The reference images were produced by the verified
+Linux and macOS builds and are pixel-identical on x86_64 and aarch64.
 
 ## Reference class counts
 

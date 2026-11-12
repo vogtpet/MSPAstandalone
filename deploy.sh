@@ -75,6 +75,12 @@ if [ ! -f "$MAKEFILE" ]; then
     exit 1
 fi
 
+# Pixel comparison tool (no Python/ImageMagick dependency, uses libtiff)
+case "$target" in
+    "Windows"|"Windows_ARM") TIFFCMP="testing/tiffcmp.exe" ;;
+    *)                       TIFFCMP="testing/tiffcmp" ;;
+esac
+
 # Number of parallel compile jobs (portable across Linux, macOS and MSYS2)
 jobs="$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)"
 case "$jobs" in
@@ -207,11 +213,36 @@ echo "==> Smoke tests passed"
 echo "    $test_dir/output.tif"
 echo "    $test_dir/output_nondefault.tif"
 
+# 5b. Compare the result with the reference output (pixel values only)
+if [ "${MSPA_SKIP_VERIFY:-0}" = "1" ]; then
+    echo "==> Pixel comparison skipped (MSPA_SKIP_VERIFY=1)"
+else
+    echo "==> Building pixel comparison tool"
+    tiff_inc=""
+    tiff_lib=""
+    if [ "$IS_MAC" = true ]; then
+        tiff_inc="-I$BREW_PREFIX/include"
+        tiff_lib="-L$BREW_PREFIX/lib"
+    fi
+    "$LIB_CC" -std=c99 -O2 -Wall $tiff_inc -o "$TIFFCMP" \
+        testing/tiffcmp.c $tiff_lib -ltiff -lm
+
+    if [ -f testing/reference.tif ] && [ -f testing/reference_nondefault.tif ]; then
+        echo "==> Verifying output.tif against testing/reference.tif"
+        "$TIFFCMP" testing/reference.tif testing/output.tif
+        echo "==> Verifying output_nondefault.tif against testing/reference_nondefault.tif"
+        "$TIFFCMP" testing/reference_nondefault.tif testing/output_nondefault.tif
+    else
+        echo "WARNING: reference images not found in testing/; skipping pixel comparison."
+    fi
+fi
+
 # 6. Remove intermediate build files
 echo "==> Cleaning up intermediate files"
 make -C mial-master/core/c clean
 make -f "$MAKEFILE" clean
 rm -f libmiallib_mspa.a
+rm -f "$TIFFCMP"
 
 echo
 echo "==> Done: $DIST_DIR/"
