@@ -29,8 +29,8 @@ python3 compare_outputs.py output_linux.tif output_macos_arm.tif
 ## Reference class counts
 
 The following class counts were obtained from the Linux x86_64 build and are
-identical for the macOS build. They can be used to verify a new build on any
-platform. The pixel values are the MSPA class codes.
+identical for the Linux aarch64 and macOS builds. They can be used to verify
+a new build on any platform. The pixel values are the MSPA class codes.
 
 Default parameters (`-graphfg 8 -internal 1 -transition 1`):
 
