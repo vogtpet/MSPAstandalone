@@ -1,0 +1,113 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: Linux
+            os: ubuntu-24.04
+          - target: Linux_ARM
+            os: ubuntu-24.04-arm
+          - target: Windows
+            os: windows-2025
+            msystem: UCRT64
+            msys2_release: false
+            msys2_packages: >-
+              mingw-w64-ucrt-x86_64-toolchain
+              mingw-w64-ucrt-x86_64-gcc
+              mingw-w64-ucrt-x86_64-gcc-libs
+              mingw-w64-ucrt-x86_64-make
+              mingw-w64-ucrt-x86_64-libtiff
+              mingw-w64-ucrt-x86_64-libpng
+              mingw-w64-ucrt-x86_64-libwebp
+              mingw-w64-ucrt-x86_64-libjpeg-turbo
+              mingw-w64-ucrt-x86_64-jbigkit
+              mingw-w64-ucrt-x86_64-lerc
+              mingw-w64-ucrt-x86_64-zstd
+              mingw-w64-ucrt-x86_64-xz
+              mingw-w64-ucrt-x86_64-zlib
+              mingw-w64-ucrt-x86_64-libdeflate
+          - target: Windows_ARM
+            os: windows-11-arm
+            msystem: CLANGARM64
+            msys2_release: true
+            msys2_packages: >-
+              mingw-w64-clang-aarch64-clang
+              mingw-w64-clang-aarch64-openmp
+              mingw-w64-clang-aarch64-toolchain
+              mingw-w64-clang-aarch64-gcc-compat
+              mingw-w64-clang-aarch64-libtiff
+              mingw-w64-clang-aarch64-libpng
+              mingw-w64-clang-aarch64-libwebp
+              mingw-w64-clang-aarch64-libjpeg-turbo
+              mingw-w64-clang-aarch64-jbigkit
+              mingw-w64-clang-aarch64-lerc
+              mingw-w64-clang-aarch64-zstd
+              mingw-w64-clang-aarch64-xz
+              mingw-w64-clang-aarch64-zlib
+              mingw-w64-clang-aarch64-libdeflate
+          - target: macOS_ARM
+            os: macos-14
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential gcc g++ make libgomp1 file \
+            libtiff-dev libdeflate-dev libpng-dev libwebp-dev libjpeg-dev \
+            libjbig-dev liblerc-dev libsharpyuv-dev libzstd-dev \
+            liblzma-dev zlib1g-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install gcc liblerc libdeflate libtiff jpeg-turbo \
+            libpng webp jbigkit zstd xz
+          gcc_major="$(brew list --versions gcc | awk '{print $2}' | cut -d. -f1)"
+          echo "MSPA_CC=gcc-${gcc_major}" >> "$GITHUB_ENV"
+
+      - name: Set up MSYS2
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msystem }}
+          release: ${{ matrix.msys2_release }}
+          update: true
+          install: ${{ matrix.msys2_packages }}
+
+      - name: Build and test (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: ./deploy.sh ${{ matrix.target }}
+
+      - name: Build and test (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: ./deploy.sh ${{ matrix.target }}
+
+      - name: Upload the standalone binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: mspa-${{ matrix.target }}
+          path: mspa_dist_*/
+          if-no-files-found: error

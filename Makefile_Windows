@@ -11,10 +11,12 @@
 
 OBJ_FSP = corridor_lightmemt.o frag.o mia_parse.o
 
+MIALINC = mial-master/core/c
+
 CC = gcc
 
 CFLAGS = -std=c99 -O2 -m64 -mtune=generic -Wall -fopenmp \
-         -DFSP -DOPENMP -DNO_BUF
+         -DFSP -DOPENMP -DNO_BUF -I$(MIALINC)
 
 LDFLAGS = -s -static -static-libgcc -static-libstdc++ -fopenmp \
           -Wl,--stack,16777216
@@ -48,7 +50,10 @@ fsp$(EXE): $(OBJ_FSP) libmiallib_mspa.a
 	$(CC) $(LDFLAGS) -o fsp$(EXE) $(OBJ_FSP) $(LDLIBS)
 	$(CP) fsp$(EXE) mspa_win64$(EXE)
 
-%.o: %.c miallib.h op.h mia_parse.h frag.h
+MIALINC = mial-master/core/c
+
+%.o: %.c $(MIALINC)/miallib.h $(MIALINC)/mialtypes.h \
+       $(MIALINC)/config_miallib.h $(MIALINC)/op.h mia_parse.h frag.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:

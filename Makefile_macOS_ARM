@@ -17,10 +17,12 @@ BREW_PREFIX := $(shell brew --prefix 2>/dev/null)
 
 OBJ_FSP = corridor_lightmemt.o frag.o mia_parse.o
 
+MIALINC = mial-master/core/c
+
 CC = gcc-16
 
 CFLAGS = -std=c99 -O2 -Wall -fopenmp \
-         -DFSP -DOPENMP -DNO_BUF \
+         -DFSP -DOPENMP -DNO_BUF -I$(MIALINC) \
          -I$(BREW_PREFIX)/include
 
 OUTPUT_BIN = mspa_macOS_ARM
@@ -57,7 +59,10 @@ fsp: $(OBJ_FSP) libmiallib_mspa.a
 	strip fsp
 	cp fsp $(OUTPUT_BIN)
 
-%.o: %.c miallib.h op.h mia_parse.h frag.h
+MIALINC = mial-master/core/c
+
+%.o: %.c $(MIALINC)/miallib.h $(MIALINC)/mialtypes.h \
+       $(MIALINC)/config_miallib.h $(MIALINC)/op.h mia_parse.h frag.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:

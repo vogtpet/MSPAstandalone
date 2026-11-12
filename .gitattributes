@@ -1,0 +1,13 @@
+# Keep shell scripts and makefiles in LF form on every platform. This matters
+# for the MSYS2/Windows CI jobs: a CRLF checkout breaks bash and make.
+* text=auto eol=lf
+
+*.docx binary
+*.tif binary
+*.tiff binary
+*.png binary
+*.xcf binary
+*.exe binary
+*.dll binary
+*.dylib binary
+*.a binary
