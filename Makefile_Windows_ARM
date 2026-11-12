@@ -1,0 +1,56 @@
+OBJ_FSP = corridor_lightmemt.o frag.o mia_parse.o
+
+CC = gcc
+LD = g++
+
+# COMPILER FLAGS (Safe for C files)
+CFLAGS = -std=c99 -O3 -fopenmp \
+         -DFSP -DEFEDT_G_IS_UINT32 -DOPENMP -DLIIAR -DLIBPROJ \
+         -DTESTING -DTEST2 -DEERIE -DMARCIN -DDISK_WRITE \
+         -Wall -w
+
+# LINKER FLAGS
+LDFLAGS = -s -static -fopenmp -Wl,--stack,16777216
+
+# LINKER LIBS 
+LDLIBS = libmiallib_mspa.a \
+         -ltiff -lpng -lwebp -ljpeg -ljbig -lLerc -lsharpyuv \
+         -ldeflate -lz -lzstd -llzma \
+         -lomp -lm -lc++
+
+# DETECT ENVIRONMENT FOR SYSTEM COMMANDS (True Windows vs POSIX portability)
+# Default values for standard Linux/macOS/POSIX environments
+RM = rm -f
+CP = cp
+EXE =
+
+ifeq ($(OS),Windows_NT)
+    EXE = .exe
+    # Check if we are running in native Windows CMD or PowerShell vs a bash shell
+    ifeq ($(findstring cmd.exe,$(SHELL)),cmd.exe)
+        RM = del /Q /F
+        CP = copy /Y
+    else ifeq ($(findstring powershell,$(SHELL)),powershell)
+        RM = Remove-Item -Force
+        CP = Copy-Item -Force
+    else
+        # MSYS2, Git Bash, Cygwin, or cross-compilation environments running bash
+        RM = rm -f
+        CP = cp
+    endif
+endif
+
+
+# Core compilation target
+fsp$(EXE): libmiallib_mspa.a $(OBJ_FSP)
+	# Force-delete old targets first to break active file system locks safely
+	$(RM) fsp$(EXE) mspa_win64_ARM$(EXE)
+	$(LD) $(LDFLAGS) -o fsp$(EXE) $(OBJ_FSP) $(LDLIBS)
+	$(CP) fsp$(EXE) mspa_win64_ARM$(EXE)
+
+
+%.o: %.c miallib.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+clean:
+	$(RM) *.o fsp$(EXE) mspa_win64_ARM$(EXE)

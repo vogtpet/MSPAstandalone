@@ -1,0 +1,19 @@
+OBJ_FSP = corridor_lightmemt.o frag.o mia_parse.o
+
+CC = gcc
+CFLAGS = -std=c99 -O2 -Wall -fopenmp -DFSP -DOPENMP -DLIIAR -DLIBPROJ -DTESTING -DTEST2 -DEERIE -DUNIX -DMARCIN -DDISK_WRITE -w
+
+fsp: $(OBJ_FSP) libmiallib_mspa.a
+	$(CC) -O2 -fopenmp -static-libgcc -s -o fsp $(OBJ_FSP) \
+		-Wl,--whole-archive libmiallib_mspa.a -Wl,--no-whole-archive \
+		-Wl,-Bstatic \
+		-ltiff -ldeflate -lz -lzstd -llzma -lpng -ljpeg -ljbig -lgomp -lwebp -lgsl -lgslcblas -lLerc -lsharpyuv -lstdc++ \
+		-Wl,-Bdynamic \
+		-lpthread -lm -ldl -lc
+	cp fsp mspa_linux_ARM
+
+%.o: %.c miallib.h
+	$(COMPILE.c) -o $@ $<
+
+clean:
+	rm -f *.o fsp mspa_linux_ARM
