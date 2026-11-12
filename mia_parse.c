@@ -84,9 +84,9 @@ int parse_free( ParseArg* atom ) {
 int parse_load( int Narg, int argc, char *argv[], ParseArg* atom ) {
   /***************************************************************************/
   int flagv=1;
-  int lar, arglen;
+  int lar;
   int in, i, cur;
-  char usage[MAXTEXTLENGTH];
+  const char *optname = NULL;
   int l;
 
 
@@ -112,42 +112,73 @@ int parse_load( int Narg, int argc, char *argv[], ParseArg* atom ) {
     
     /* If a flag has been recognized, process... */
     if(flagv == 1) {
+      optname = atom[in].argname;
       for ( i=0; i<atom[in].num; i++ ) { 
 	/* check all parameters (atom[in].num in total) following the flag */
 	
 	if (atom[in].type == IS_STRING) { /* the parameter is of type CHAR list */
+	  const unsigned int buflen = atom[in+i].bufsize;
 	  lar++;
-	  if((argv[lar]==NULL) || (argv[lar][0]=='-')) {
-	    fprintf(stderr,"\nMissing argument for option %s",argv[lar-i-1]);
-	    exit(-1);
+	  if((lar >= argc) || (argv[lar]==NULL)) {
+	    fprintf(stderr,"\nMissing argument for option %s\n",optname);
+	    exit(ERROR);
 	  }	  
-	  strcpy(atom[in+i].var.c,argv[lar]); // atom[in+i].var.c = argv[lar];
+	  if(argv[lar][0]=='-') {
+	    fprintf(stderr,"\nMissing argument for option %s (got \"%s\")\n",
+		    optname,argv[lar]);
+	    exit(ERROR);
+	  }
+	  if((buflen > 0) && (strlen(argv[lar]) >= (size_t)buflen)) {
+	    fprintf(stderr,"\nValue for option %s is too long (max %u characters)\n",
+		    optname,buflen-1);
+	    exit(ERROR);
+	  }
+	  snprintf(atom[in+i].var.c,
+		   (buflen > 0) ? (size_t)buflen : (size_t)MAXNAMELENGTH,
+		   "%s",argv[lar]);
 	  
 	} else if(atom[in].type == IS_INT)  { /* the parameter is of type INT */
 	  lar++; 
-	  sscanf(argv[lar],"%d",atom[in+i].var.i);
+	  if((lar >= argc) || (argv[lar]==NULL)) {
+	    fprintf(stderr,"\nMissing argument for option %s\n",optname);
+	    exit(ERROR);
+	  }
+	  if(sscanf(argv[lar],"%d",atom[in+i].var.i) != 1) {
+	    fprintf(stderr,"\nInvalid integer value \"%s\" for option %s\n",
+		    argv[lar],optname);
+	    exit(ERROR);
+	  }
 	  if((*(atom[in+i].var.i)<atom[in+i].minval.i) ||
 	     (*(atom[in+i].var.i)>atom[in+i].maxval.i)) {
 	    fprintf(stderr,"\nValue out of range (%d - %d) for argument %s\n",
-		       atom[in+i].minval.i,atom[in+i].maxval.i,atom[in].argname);
+		       atom[in+i].minval.i,atom[in+i].maxval.i,optname);
 	    flagv=-1;
 	    break;
 	  }
 	  
-	}  else if(atom[in].type == IS_DOUBLE)  { /* the parameter is of type DOUBLE */	  lar++;
-	  sscanf(argv[lar],"%lf",atom[in+i].var.d);
+	}  else if(atom[in].type == IS_DOUBLE)  { /* the parameter is of type DOUBLE */
+	  lar++;
+	  if((lar >= argc) || (argv[lar]==NULL)) {
+	    fprintf(stderr,"\nMissing argument for option %s\n",optname);
+	    exit(ERROR);
+	  }
+	  if(sscanf(argv[lar],"%lf",atom[in+i].var.d) != 1) {
+	    fprintf(stderr,"\nInvalid numeric value \"%s\" for option %s\n",
+		    argv[lar],optname);
+	    exit(ERROR);
+	  }
 	  if((*(atom[in+i].var.d)<atom[in+i].minval.d) ||
 	     (*(atom[in+i].var.d)>atom[in+i].maxval.d))	{
 	    fprintf(stderr,"\nValue out of range (%g - %g) for argument %s\n",
-		       atom[in+i].minval.d,atom[in+i].maxval.d,atom[in].argname);
+		       atom[in+i].minval.d,atom[in+i].maxval.d,optname);
 	    flagv=-1;
 	    break;
 	  }
 	  
 	}
       }
-    if(atom[in].type == IS_FLAG) /* : the parameter is a FLAG */
-      *(atom[in].flag) = TRUE; 	/* otherwise FALSE */
+      if((flagv == 1) && (atom[in].type == IS_FLAG) && (atom[in].flag != NULL))
+	*(atom[in].flag) = TRUE; 	/* otherwise FALSE */
     }
   }	// end of parsing loop 'for( lar=1,flagv=1; ...'
 
@@ -158,8 +189,8 @@ int parse_load( int Narg, int argc, char *argv[], ParseArg* atom ) {
     fprintf(stderr,"\nUnknown option %s\n",argv[lar]);
     exit(ERROR);
   } else if(flagv == -1) {
-    fprintf(stderr,"\nParameters for option %s out of the range of possible values",
-	    argv[lar-i-2]);
+    fprintf(stderr,"\nValue for option %s out of the range of possible values\n",
+	    (optname != NULL) ? optname : "");
     exit(ERROR);
   }
   

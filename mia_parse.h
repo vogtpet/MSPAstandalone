@@ -7,7 +7,7 @@
  ** Last update: 18/12/17
  **/
 #ifndef   	_MIA_PARSE_H_
-#define   	_MIA_PARSE_H
+#define   	_MIA_PARSE_H_
 
 /* Some useful pseudo-constants for parametrisation */
 
@@ -34,17 +34,19 @@
 " Remote Sensing and Spatial Information Sciences, Volume XLVIII-4/W1-2022 \n" \
 " DOI: https://doi.org/10.5194/isprs-archives-XLVIII-4-W1-2022-427-2022    \n" \
 "\n"		 \
-"Disclaimer: \n" \
-"=========== \n" \
-"1. The use of the software of this interface is made available\n" \
-"   for non-commercial purposes. For commercial purposes please \n" \
-"   contact: Peter.Vogt@ec.europa.eu \n" \
-"2. The JRC, on behalf of the European Commission does not accept any\n" \
-"   liability whatsoever for any error, or for any loss or damage\n" \
-"   arising from the use of the software of this interface.\n" \
-"3. If the results of this interface are passed on to third parties\n" \
-"   it has to be assured that the conditions of the disclaimer \n" \
-"   are agreed and fulfilled.\n" \
+"License: GNU General Public License v3.0 or later (GPL-3.0-or-later).\n" \
+"======== \n" \
+"This program is free software: you can redistribute it and/or modify\n" \
+"it under the terms of the GNU General Public License as published by\n" \
+"the Free Software Foundation, either version 3 of the License, or\n" \
+"(at your option) any later version.\n" \
+"\n" \
+"This program is distributed in the hope that it will be useful,\n" \
+"but WITHOUT ANY WARRANTY; without even the implied warranty of\n" \
+"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n" \
+"GNU General Public License for more details.\n" \
+"You should have received a copy of the GNU General Public License\n" \
+"along with this program.  If not, see <https://www.gnu.org/licenses/>.\n" \
 "-------------------------------------------------------------------\n"
 #endif
 
@@ -79,7 +81,7 @@
 #define MAXTEXTLENGTH  500
 #endif
 #ifndef MAXNAMELENGTH
-#define MAXNAMELENGTH MAXCHARLENGTH
+#define MAXNAMELENGTH  1024  /* max length of a file name / path argument */
 #endif
 #ifndef MAXLINELENGTH
 #define MAXLINELENGTH  70
@@ -131,6 +133,7 @@ typedef struct mia_parsearg{
   int   type;               // type of variable
   int   *flag;              // pointer to variable, if flag
   int   num;              // number of expected parameters
+  unsigned int bufsize;   // size of the destination buffer (IS_STRING only)
   UPtrPar var;               // pointer to variable
   UPar  minval;            // minimum value
   UPar  maxval;            // maximum value

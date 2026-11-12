@@ -19,6 +19,46 @@ extern int fsp(char fnin[], char fnout[], float size, int graphfg, float edu, in
 
 int FlagVerbose=FALSE;
 
+/* Return TRUE if path is absolute on the current platform. */
+static int mspa_path_is_absolute(const char *path)
+{
+  if((path == NULL) || (path[0] == '\0'))
+    return FALSE;
+
+#if defined(_WIN32) || defined(__CYGWIN__)
+  /* UNC path (\\server\share), rooted path (\dir or /dir) or drive letter */
+  if((path[0] == '\\') || (path[0] == '/'))
+    return TRUE;
+  if((((path[0] >= 'A') && (path[0] <= 'Z')) ||
+      ((path[0] >= 'a') && (path[0] <= 'z'))) && (path[1] == ':'))
+    return TRUE;
+#endif
+
+  return (path[0] == '/') ? TRUE : FALSE;
+}
+
+/* Join a directory and a file name into out (of size n).
+ * Absolute file names are used as-is; a separator is only added when
+ * the directory does not already end with one.
+ * Returns OK or ERROR (buffer too small). */
+static int mspa_path_join(char *out, size_t n, const char *dir, const char *name)
+{
+  const char *sep = "";
+  size_t dlen;
+
+  if((out == NULL) || (n == 0) || (name == NULL))
+    return ERROR;
+
+  if((dir == NULL) || (dir[0] == '\0') || mspa_path_is_absolute(name))
+    return (snprintf(out, n, "%s", name) < (int)n) ? OK : ERROR;
+
+  dlen = strlen(dir);
+  if((dir[dlen-1] != '/') && (dir[dlen-1] != '\\'))
+    sep = "/";
+
+  return (snprintf(out, n, "%s%s%s", dir, sep, name) < (int)n) ? OK : ERROR;
+}
+
 int func_test( funcPar *fpar ){
   printf("\nParameters");
   printf("\niname=%s",fpar->iname);
@@ -38,27 +78,41 @@ int main(int argc, char **argv) {
   funcPar *fpar; /* structure defining the parametes of the function
 		  * if you don't like it, just declare the fields of
 		  * the structure as variables of the main */
+  char full_out_path[2 * MAXNAMELENGTH + 2];
+  int status;
 
-  if((fpar=(funcPar*)malloc(sizeof(funcPar))) == NULL)
-    exit(ERROR);
+  if((fpar=(funcPar*)calloc(1,sizeof(funcPar))) == NULL) {
+    fprintf(stderr,"\nOut of memory.\n");
+    return ERROR;
+  }
   func_init(fpar);
 
-  if(func_parse(argc,argv,fpar) == ERROR )
-    exit(ERROR);
+  if(func_parse(argc,argv,fpar) == ERROR ) {
+    free(fpar);
+    return ERROR;
+  }
 
   func_check( fpar );
 
   if (FlagVerbose)
     func_test( fpar );
 
-  // Safe fix using a dedicated path buffer
-  char full_out_path[4096];
-  snprintf(full_out_path, sizeof(full_out_path), "%s/%s", fpar->odir, fpar->oname);
+  /* Build the output path: absolute -o values are kept as they are,
+   * otherwise -odir is prepended (with a single separator). */
+  if(mspa_path_join(full_out_path, sizeof(full_out_path),
+		    fpar->odir, fpar->oname) != OK) {
+    fprintf(stderr,"\nError: output path is too long.\n");
+    free(fpar);
+    return ERROR;
+  }
 
-  // Pass the safe buffer to the function
-  fsp(fpar->iname, full_out_path, (float) fpar->psize, fpar->pgraphfg,(float) fpar->pedu,fpar->flag_disk,fpar->transition,fpar->internal);
+  status = fsp(fpar->iname, full_out_path, (float) fpar->psize,
+	       fpar->pgraphfg,(float) fpar->pedu,fpar->flag_disk,
+	       fpar->transition,fpar->internal);
 
-  return OK;
+  free(fpar);
+
+  return status;
 }
 
 
@@ -72,11 +126,11 @@ int func_parse(int argc, char *argv[], funcPar *fpar) {
   narg = parse_init(atom);
 
   narg = parse_define( narg, atom, fpar );
-  parse_load( narg, argc, argv, atom );
+  narg = parse_load( narg, argc, argv, atom );
 
   parse_free( atom );
 
-  return OK;
+  return (narg == ERROR) ? ERROR : OK;
 } // end of main
 
 
@@ -91,6 +145,7 @@ int parse_define( int narg, ParseArg *atom, funcPar *fpar ) {
   sprintf(atom[in].explain," %s : Name of the input image.\n",atom[in].argname);
   atom[in].type=IS_STRING;
   atom[in].var.c=&(fpar->iname[0]);
+  atom[in].bufsize=MAXNAMELENGTH;
   atom[in].num=1, in++;
 
   //   Argument Output. Type : String
@@ -100,6 +155,7 @@ int parse_define( int narg, ParseArg *atom, funcPar *fpar ) {
 	  atom[in].argname, DEF_ONAME);
   atom[in].type=IS_STRING;
   atom[in].var.c=&(fpar->oname[0]);
+  atom[in].bufsize=MAXNAMELENGTH;
   atom[in].num=1, in++;
 
    //   Argument PEDU. Type: Double
@@ -154,6 +210,7 @@ int parse_define( int narg, ParseArg *atom, funcPar *fpar ) {
 	  atom[in].argname,DEF_ODIR);
   atom[in].type=IS_STRING;
   atom[in].var.c=&(fpar->odir[0]);
+  atom[in].bufsize=MAXNAMELENGTH;
   atom[in].num=1, in++;
 
 
@@ -193,6 +250,10 @@ int parse_define( int narg, ParseArg *atom, funcPar *fpar ) {
 /******************************************************/
 int func_init( funcPar *fpar ) {
 /******************************************************/
+  /* calloc() normally zeroes the structure, but do not rely on it */
+  fpar->iname[0] = '\0';
+  fpar->oname[0] = '\0';
+  fpar->odir[0]  = '\0';
   fpar->pgraphfg = ABSURD_PGRAPHFG;
   fpar->psize = ABSURD_PSIZE;
   fpar->pedu = ABSURD_PEDU;

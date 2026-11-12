@@ -6,7 +6,9 @@
  ** Last update: 31/07/07
  **/
 #ifndef   	_FRAG_H_
-#define   	_FRAG_H 
+#define   	_FRAG_H_
+
+#include "mia_parse.h"   /* ParseArg is used below */
 
 #ifndef _FUNC_PAR_STRUCT_
 #define _FUNC_PAR_STRUCT_
