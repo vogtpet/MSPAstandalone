@@ -1,36 +1,66 @@
+# ---------------------------------------------------------------------------
+# MSPA driver makefile - macOS aarch64 / Apple Silicon (Homebrew GCC)
+#
+# Do not run this makefile directly: use ./deploy.sh macOS_ARM, which builds
+# the static library libmiallib_mspa.a (in mial-master/core/c) first and
+# bundles the two remaining dynamic libraries with install_name_tool.
+#
+# CPU portability: no -march / -march=native is used, so the binary runs on
+# every Apple Silicon CPU.
+#
+# The macOS binary is an aarch64 binary for macOS 11 or later unless the
+# toolchain default is higher. To lower the minimum macOS version, add for
+# example -mmacosx-version-min=11.0 to CFLAGS and LDFLAGS below.
+# ---------------------------------------------------------------------------
+
+BREW_PREFIX := $(shell brew --prefix 2>/dev/null)
 
 OBJ_FSP = corridor_lightmemt.o frag.o mia_parse.o
 
 CC = gcc-16
-# Removed -m64 (not needed on native ARM64) and fixed the include path to /opt/homebrew/include
-CFLAGS = -std=c99 -O2 -Wall -fopenmp -DFSP -DOPENMP -DLIIAR -DLIBPROJ -DTESTING -DTEST2 -DEERIE -DUNIX -DMARCIN -DDISK_WRITE -w -I/opt/homebrew/include
+
+CFLAGS = -std=c99 -O2 -Wall -fopenmp \
+         -DFSP -DOPENMP -DNO_BUF \
+         -I$(BREW_PREFIX)/include
 
 OUTPUT_BIN = mspa_macOS_ARM
 
-# Updated all static libraries to use the ARM Homebrew paths (/opt/homebrew)
+GOMP_LIB = $(BREW_PREFIX)/opt/gcc/lib/gcc/current/libgomp.a
+
+# Static libraries: only the libraries needed by MSPA (libtiff and its
+# dependencies). They are given with their full path so that no version
+# specific Homebrew symlink is required.
 STATIC_LIBS = \
-	/opt/homebrew/opt/libtiff/lib/libtiff.a \
-	/opt/homebrew/opt/zstd/lib/libzstd.a \
-	/opt/homebrew/opt/xz/lib/liblzma.a \
-	/opt/homebrew/opt/libpng/lib/libpng.a \
-	/opt/homebrew/opt/jpeg-turbo/lib/libjpeg.a \
-	/opt/homebrew/opt/jbigkit/lib/libjbig.a \
-	/opt/homebrew/opt/webp/lib/libwebp.a \
-	/opt/homebrew/opt/webp/lib/libsharpyuv.a \
-	/opt/homebrew/Cellar/gcc/16.2.0/lib/gcc/current/libgomp.a
+	$(BREW_PREFIX)/opt/libtiff/lib/libtiff.a \
+	$(BREW_PREFIX)/opt/zstd/lib/libzstd.a \
+	$(BREW_PREFIX)/opt/xz/lib/liblzma.a \
+	$(BREW_PREFIX)/opt/libpng/lib/libpng.a \
+	$(BREW_PREFIX)/opt/jpeg-turbo/lib/libjpeg.a \
+	$(BREW_PREFIX)/opt/jbigkit/lib/libjbig.a \
+	$(BREW_PREFIX)/opt/webp/lib/libwebp.a \
+	$(BREW_PREFIX)/opt/webp/lib/libsharpyuv.a \
+	$(GOMP_LIB)
 
 fsp: $(OBJ_FSP) libmiallib_mspa.a
-	# Updated include library path to -L/opt/homebrew/lib
-	$(CC) -O2 -fopenmp -static-libgcc -o fsp $(OBJ_FSP) \
+	@missing=""; for f in $(STATIC_LIBS); do \
+	  [ -f "$$f" ] || missing="$$missing $$f"; done; \
+	if [ -n "$$missing" ]; then \
+	  echo "ERROR: missing libraries:$$missing"; \
+	  echo "Install them with:"; \
+	  echo "  brew install gcc liblerc libdeflate libtiff jpeg-turbo libpng webp jbigkit zstd xz"; \
+	  exit 1; fi
+	$(CC) -O2 -fopenmp -static-libgcc -static-libstdc++ -o fsp $(OBJ_FSP) \
 		-Wl,-force_load,libmiallib_mspa.a \
-		-L/opt/homebrew/lib \
+		-L$(BREW_PREFIX)/lib \
 		$(STATIC_LIBS) \
-		-ldeflate -llerc -lgsl -lgslcblas -lz -lstdc++ -lpthread -lm -ldl
+		-ldeflate -llerc -lz -lstdc++ -lpthread -lm -ldl
 	strip fsp
 	cp fsp $(OUTPUT_BIN)
 
-%.o: %.c miallib.h
-	$(COMPILE.c) -o $@ $<
+%.o: %.c miallib.h op.h mia_parse.h frag.h
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -f *.o fsp mspa_macOS_ARM
+	-rm -f *.o fsp $(OUTPUT_BIN)
+
+.PHONY: clean

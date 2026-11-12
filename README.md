@@ -28,14 +28,16 @@ and the GuidosToolbox Workbench.
 |---------------|-----------------------------|------------|-------------------------------|
 | `Linux`       | Linux (glibc, e.g. Debian 13) | x86_64   | GCC (distribution packages)   |
 | `Linux_ARM`   | Linux (glibc, e.g. Debian 13) | aarch64  | GCC (distribution packages)   |
-| `macOS_ARM`   | macOS 11 or later           | Apple Silicon | Homebrew GCC (`gcc-16`)    |
+| `macOS_ARM`   | macOS (Apple Silicon)       | Apple Silicon | Homebrew GCC (`gcc-16`)    |
 | `Windows`     | Windows 10/11               | x86_64     | MSYS2 UCRT64 (GCC)            |
 | `Windows_ARM` | Windows 11                  | ARM64      | MSYS2 CLANGARM64 (Clang)      |
 
 The binaries are built with generic CPU tuning (no `-march=native` or other
 CPU-specific instruction sets), so a binary built for `x86_64` runs on any
 Intel or AMD x86_64 CPU, and a binary built for `aarch64` runs on any ARMv8-A
-compatible CPU.
+compatible CPU. The minimum macOS version of the macOS binary is the
+deployment target of your GCC toolchain (macOS 11 or later for Apple Silicon);
+lower it with `-mmacosx-version-min` in `Makefile_macOS_ARM` if needed.
 
 ## Repository layout
 
@@ -250,6 +252,9 @@ compile and run on Windows and macOS, on x86_64 and aarch64:
   depends on GDAL, PROJ or FFTW;
 * the `FSP` build flag is passed to the library so that the MSPA-specific
   TIFF software tag and input handling remain unchanged.
+
+The exact list of modified files is in
+[`mial-master/MODIFICATIONS.md`](mial-master/MODIFICATIONS.md).
 
 ## Documentation
 

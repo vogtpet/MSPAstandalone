@@ -1,35 +1,36 @@
+# ---------------------------------------------------------------------------
+# MSPA driver makefile - MS-Windows x86_64 (MSYS2 UCRT64, GCC)
+#
+# Do not run this makefile directly: use ./deploy.sh Windows, which builds
+# the static library libmiallib_mspa.a (in mial-master/core/c) first.
+#
+# CPU portability: -mtune=generic only affects instruction scheduling; no
+# CPU specific instruction set is enabled, so the binary runs on any x86_64
+# CPU (Intel or AMD).
+# ---------------------------------------------------------------------------
+
 OBJ_FSP = corridor_lightmemt.o frag.o mia_parse.o
-CC = gcc 
 
-# COMPILER FLAGS (Strictly for compiling translation units)
-# -O3: Maximum performance loop optimizations and standard vectorizations
-# -mtune=generic: Optimizes code to run optimally across ALL generic x86_64 CPUs safely
-CFLAGS = -std=c99 -O3 -mtune=generic -m64 -fopenmp \
-         -DFSP -DEFEDT_G_IS_UINT32 -DOPENMP -DLIIAR -DLIBPROJ \
-         -DTESTING -DTEST2 -DEERIE -DUNIX -DMARCIN -DDISK_WRITE \
-         -Wall -w
+CC = gcc
 
-# LINKER FLAGS (Strictly for the final binding stage)
-# -static: Enforces absolute static compilation of all downstream .a archive modules
-# -static-libgcc -static-libstdc++: Embeds GNU fundamental architectures directly
-# -s: Forces GCC to output a pre-stripped file directly
-LDFLAGS = -s -static -static-libgcc -static-libstdc++ -fopenmp -Wl,--stack,16777216
+CFLAGS = -std=c99 -O2 -m64 -mtune=generic -Wall -fopenmp \
+         -DFSP -DOPENMP -DNO_BUF
 
-# LINKER LIBS (Ordered strictly from highest-level dependency to lowest-level primitives)
+LDFLAGS = -s -static -static-libgcc -static-libstdc++ -fopenmp \
+          -Wl,--stack,16777216
+
 LDLIBS = libmiallib_mspa.a \
          -ltiff -lpng -lwebp -ljpeg -ljbig -lLerc -lsharpyuv \
          -ldeflate -lz -lzstd -llzma \
-         -lgomp -lm -lstdc++
+         -lgomp -lstdc++ -lm
 
-# DETECT ENVIRONMENT FOR SYSTEM COMMANDS (True Windows vs POSIX portability)
-# Default values for standard Linux/macOS/POSIX environments
+# System commands (native Windows shell vs MSYS2/Git Bash)
 RM = rm -f
 CP = cp
 EXE =
 
 ifeq ($(OS),Windows_NT)
     EXE = .exe
-    # Check if we are running in native Windows CMD or PowerShell vs a bash shell
     ifeq ($(findstring cmd.exe,$(SHELL)),cmd.exe)
         RM = del /Q /F
         CP = copy /Y
@@ -37,23 +38,20 @@ ifeq ($(OS),Windows_NT)
         RM = Remove-Item -Force
         CP = Copy-Item -Force
     else
-        # MSYS2, Git Bash, Cygwin, or cross-compilation environments running bash
         RM = rm -f
         CP = cp
     endif
 endif
 
-
-# Core compilation target
-fsp$(EXE): libmiallib_mspa.a $(OBJ_FSP)
-	# Force-delete old targets first to break active file system locks safely
-	$(RM) fsp$(EXE) mspa_win64$(EXE)
+fsp$(EXE): $(OBJ_FSP) libmiallib_mspa.a
+	-$(RM) fsp$(EXE) mspa_win64$(EXE)
 	$(CC) $(LDFLAGS) -o fsp$(EXE) $(OBJ_FSP) $(LDLIBS)
 	$(CP) fsp$(EXE) mspa_win64$(EXE)
 
-
-%.o: %.c miallib.h
+%.o: %.c miallib.h op.h mia_parse.h frag.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	$(RM) *.o fsp$(EXE) mspa_win64$(EXE)
+	-$(RM) *.o fsp$(EXE) mspa_win64$(EXE)
+
+.PHONY: clean

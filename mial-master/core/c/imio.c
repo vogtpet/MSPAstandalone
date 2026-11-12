@@ -1179,7 +1179,7 @@ ERROR_TYPE writeTiffOneStripPerLine(IMAGE *im, char *fn, char *desc)
     TIFFSetField(tif, TIFFTAG_SOFTWARE, "mialisp");
 #endif
 #ifdef FSP
-    TIFFSetField(tif, TIFFTAG_SOFTWARE, "mspa v2.0");
+    TIFFSetField(tif, TIFFTAG_SOFTWARE, "mspa v2.4");
 #endif
     TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION, imdesc);
 

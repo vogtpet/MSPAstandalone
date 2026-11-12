@@ -7,14 +7,23 @@ UNAME_M := $(shell uname -m)
 
 BASE       = miallib
 TARGET     = lib$(BASE)
+# Respect CC/CXX given on the command line or in the environment (deploy.sh
+# passes the compiler of the target, e.g. CC=gcc-16 on macOS). Only fall back
+# to gcc/c++ when make's built-in default is in use.
+ifeq ($(origin CC),default)
 CC         = gcc
+endif
+ifeq ($(origin CXX),default)
 CXX        = c++
+endif
 
 # defined for debugging: -DDEBUG -DXLDEBUG -DXLDEBUG2 -DXLDEBUG -DDEBUB
 # skipped: -DNNI
 # to be done:  -Wextra -Wno-sign-compare
 
-CFLAGS     = -DNOSHP -DCLASSIF -DODOITHIN -DMCISRG -std=c99 -O3 -Wall -c -Wno-unknown-pragmas -I${CONDA_PREFIX}/mial/include/
+CFLAGS     = -DNOSHP -DCLASSIF -DODOITHIN -DMCISRG -std=c99 -O3 -Wall -c -Wno-unknown-pragmas
+# Extra flags for the target platform (include paths, deployment target, ...)
+CFLAGS    += $(EXTRA_CFLAGS)
 
 # 3. Handle Architecture-Specific Flag (-m64)
 IS_ARM = no
@@ -54,7 +63,9 @@ endif
 
 
 CFLAGS-XLISP  = -DXLISP
-CFLAGS-MSPA   = -DMSPA
+# -DFSP restores the MSPA specific behaviour in imio.c (software tag and
+# strict handling of unsupported input formats) that the legacy fsp build had
+CFLAGS-MSPA   = -DMSPA -DFSP
 
 prefix     = /usr/local
 exec_prefix= ${prefix}
@@ -143,11 +154,17 @@ DDIR-MSPA	   =  $(BUILDDIR)/build-shared-mspa
 DOBJS-GENERIC	   =  $(SRCS:%.c=$(DDIR-GENERIC)/%.o)
 DOBJS-MSPA	   =  $(SRCS-MSPA:%.c=$(DDIR-MSPA)/%.o)
 
-INCLUDE    = -I./ -I/mnt/jeoproc/envs/LUCHAP/conda/mial/include/python${PYVER}/ -I/usr/include/gdal/
+# Only the local headers are needed for the MSPA library. The Python and
+# GDAL include paths are only required for the SWIG/GDAL bindings and can be
+# added through EXTRA_CFLAGS if needed.
+INCLUDE    = -I.
 
 # TODO: add -lcsa -lnn
 
-ifdef $(NOSHP)
+# Build without the ESRI Shapefile writer (matches -DNOSHP in CFLAGS)
+NOSHP      = 1
+
+ifdef NOSHP
 	LIBS       = -lgdal -ltiff -ldl -lproj -lfftw3_omp -lgsl -lgslcblas
 else
 	LIBS       = -lgdal -ltiff -ldl -lproj -lfftw3_omp -lgsl -lgslcblas -lshp
