@@ -31,12 +31,21 @@ Targets:
   Windows       MS-Windows x86_64 (MSYS2 UCRT64)
   Windows_ARM   MS-Windows ARM64 (MSYS2 CLANGARM64)
 
+  -h, --help    Show this help and exit.
+
 The target must match the host operating system and CPU architecture
 (the makefiles do not cross-compile).
 EOF
 }
 
 target="${1:-}"
+case "$target" in
+    -h|--help|help)
+        usage
+        exit 0
+        ;;
+esac
+
 if [ -z "$target" ]; then
     usage
     exit 1
