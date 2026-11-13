@@ -85,6 +85,9 @@ extracted folder (the archive contains the executable and both dylibs):
 xattr -cr mspa-2.4-macos-arm64
 ```
 
+Clearing only the executable is not enough: macOS quarantines the two dylibs
+as well, and Gatekeeper then reports `libdeflate.0.dylib` on the next launch.
+
 Alternatively, right-click the executable and choose **Open**, or allow it
 under **System Settings → Privacy & Security → Open Anyway**.
 

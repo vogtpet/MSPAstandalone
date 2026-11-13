@@ -106,6 +106,9 @@ the quarantine attribute from the extracted folder:
 
     xattr -cr mspa-2.4-macos-arm64
 
+Clearing only the executable is not enough: macOS quarantines the two dylibs
+as well, and Gatekeeper then reports `libdeflate.0.dylib` on the next launch.
+
 Or right-click the executable and choose Open, or allow it under System
 Settings → Privacy & Security → Open Anyway. Re-signing the binary locally
 does not remove the warning; only an Apple Developer ID signature and
