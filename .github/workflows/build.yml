@@ -111,3 +111,20 @@ jobs:
           name: mspa-${{ matrix.target }}
           path: mspa_dist_*/
           if-no-files-found: error
+
+  hygiene:
+    name: repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Check that no build artifacts are tracked
+        run: |
+          bad="$(git ls-files | grep -E '(^|/)(mspa_dist_)|\.(o|a|so|dylib|dll|exe)$|(^|/)banner\.h$|(^|/)\.DS_Store$' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::Build artifacts must not be committed to the repository:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "No build artifacts are tracked."
