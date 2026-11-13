@@ -51,7 +51,7 @@ jobs:
             msys2_packages: >-
               base-devel
               mingw-w64-clang-aarch64-clang
-              mingw-w64-clang-aarch64-openmp
+              mingw-w64-clang-aarch64-llvm-openmp
               mingw-w64-clang-aarch64-toolchain
               mingw-w64-clang-aarch64-gcc-compat
               mingw-w64-clang-aarch64-libtiff
@@ -65,11 +65,11 @@ jobs:
               mingw-w64-clang-aarch64-zlib
               mingw-w64-clang-aarch64-libdeflate
           - target: macOS_ARM
-            os: macos-14
+            os: macos-15
 
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
@@ -106,7 +106,7 @@ jobs:
         run: bash ./deploy.sh ${{ matrix.target }}
 
       - name: Upload the standalone binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mspa-${{ matrix.target }}
           path: mspa_dist_*/

@@ -128,7 +128,7 @@ the **CLANGARM64** terminal and run:
 ```sh
 pacman -Syu
 pacman -S --needed \
-    mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-openmp \
+    mingw-w64-clang-aarch64-clang mingw-w64-clang-aarch64-llvm-openmp \
     mingw-w64-clang-aarch64-toolchain mingw-w64-clang-aarch64-gcc-compat \
     mingw-w64-clang-aarch64-libtiff mingw-w64-clang-aarch64-libpng \
     mingw-w64-clang-aarch64-libwebp mingw-w64-clang-aarch64-libjpeg-turbo \
