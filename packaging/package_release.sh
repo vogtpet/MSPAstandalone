@@ -73,6 +73,10 @@ for entry in "${entries[@]}"; do
     cp -R "$dist"/. "$top"/
     cp LICENSE README.md CITATION.cff "$top"/
 
+    # Normalise permissions so the archive is usable by whoever extracts it
+    chmod -R a+rX "$top"
+    chmod 755 "$top"/mspa* 2>/dev/null || true
+
     case "$platform" in
         windows-*)
             (cd "$staging" && zip -qr "$out_abs/$name.zip" "$name")

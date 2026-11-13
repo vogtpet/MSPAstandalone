@@ -100,10 +100,16 @@ For older distributions, build from source on an older release (for example
 Debian 11, glibc 2.31); see the README.
 
 The macOS archive contains the executable and two dynamic libraries; keep
-them together. The binary is ad-hoc signed, not notarised. If macOS
-quarantines it, run:
+them together. The binary is ad-hoc signed, not notarised, so macOS shows
+the Gatekeeper warning “Apple could not verify …” on first launch. Remove
+the quarantine attribute from the extracted folder:
 
-    xattr -d com.apple.quarantine mspa_macOS_ARM
+    xattr -cr mspa-2.4-macos-arm64
+
+Or right-click the executable and choose Open, or allow it under System
+Settings → Privacy & Security → Open Anyway. Re-signing the binary locally
+does not remove the warning; only an Apple Developer ID signature and
+notarisation do.
 
 The Windows binaries are unsigned; SmartScreen may show a warning.
 
