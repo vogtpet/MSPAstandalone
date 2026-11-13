@@ -1,0 +1,54 @@
+cff-version: 1.2.0
+message: "If you use MSPA in a publication, please cite the references below."
+title: "MSPA – Morphological Spatial Pattern Analysis (standalone build)"
+abstract: >-
+  Standalone build setup for MSPA, a sequence of mathematical morphological
+  operators that classifies the foreground of a binary image into core,
+  islet, perforation, edge, loop, bridge, branch and background classes.
+  Binaries are provided for Linux, MS-Windows and macOS on x86_64 and ARM64.
+authors:
+  - family-names: Soille
+    given-names: Pierre
+    affiliation: "European Commission, Joint Research Centre (JRC)"
+  - family-names: Vogt
+    given-names: Peter
+    affiliation: "European Commission, Joint Research Centre (JRC)"
+version: "2.4"
+date-released: "2026-11-13"
+license: "GPL-3.0-or-later"
+repository-code: "https://github.com/vogtpet/MSPAstandalone"
+url: "https://github.com/vogtpet/MSPAstandalone"
+keywords:
+  - MSPA
+  - morphological image analysis
+  - remote sensing
+  - landscape ecology
+  - miallib
+references:
+  - type: article
+    title: "Morphological segmentation of binary patterns"
+    authors:
+      - family-names: Soille
+        given-names: Pierre
+      - family-names: Vogt
+        given-names: Peter
+    journal: "Pattern Recognition Letters"
+    volume: "30"
+    issue: "4"
+    start: 456
+    end: 459
+    year: 2009
+    doi: "10.1016/j.patrec.2008.10.015"
+  - type: article
+    title: "Morphological Spatial Pattern Analysis: open source release"
+    authors:
+      - family-names: Soille
+        given-names: Pierre
+      - family-names: Vogt
+        given-names: Peter
+    journal: "The International Archives of the Photogrammetry, Remote Sensing and Spatial Information Sciences"
+    volume: "XLVIII-4/W1-2022"
+    start: 427
+    end: 433
+    year: 2022
+    doi: "10.5194/isprs-archives-XLVIII-4-W1-2022-427-2022"

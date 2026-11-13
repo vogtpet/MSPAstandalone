@@ -41,9 +41,8 @@ testing/output_nondefault.tif
 testing/tiffcmp
 testing/tiffcmp.exe
 
-# ---------------------------------------------------------------------------
-# Editor / OS files
-# ---------------------------------------------------------------------------
+# Release packaging
+release/
 .DS_Store
 ._*
 *.swp

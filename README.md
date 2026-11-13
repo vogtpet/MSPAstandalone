@@ -1,5 +1,7 @@
 # MSPA – Morphological Spatial Pattern Analysis (standalone build)
 
+[![build](https://github.com/vogtpet/MSPAstandalone/actions/workflows/build.yml/badge.svg)](https://github.com/vogtpet/MSPAstandalone/actions/workflows/build.yml)
+
 This repository contains the complete source code and build setup needed to
 compile the standalone MSPA command line tool (version 2.4) for five
 operating system / CPU architecture combinations. The resulting binaries are
@@ -39,6 +41,59 @@ compatible CPU. The minimum macOS version of the macOS binary is the
 deployment target of your GCC toolchain (macOS 11 or later for Apple Silicon);
 lower it with `-mmacosx-version-min` in `Makefile_macOS_ARM` if needed.
 
+## Download
+
+Prebuilt binaries are attached to the
+[releases](https://github.com/vogtpet/MSPAstandalone/releases):
+
+| Archive | Platform |
+|---|---|
+| `mspa-2.4-linux-x86_64.tar.gz` | Linux x86_64 |
+| `mspa-2.4-linux-aarch64.tar.gz` | Linux aarch64 / ARM64 |
+| `mspa-2.4-macos-arm64.tar.gz` | macOS Apple Silicon |
+| `mspa-2.4-windows-x86_64.zip` | Windows x86_64 |
+| `mspa-2.4-windows-arm64.zip` | Windows ARM64 |
+
+Every release also includes a `SHA256SUMS` file:
+
+```sh
+sha256sum -c SHA256SUMS       # Linux
+shasum -a 256 -c SHA256SUMS   # macOS
+```
+
+On Windows, check a file with `certutil -hashfile <file> SHA256`.
+
+The Linux binaries are built on Debian 13 and require **glibc 2.41 or newer**.
+If you need to run MSPA on a distribution with an older glibc, build it on an
+older distribution (for example Debian 11, glibc 2.31); see
+[Building](#building).
+
+The macOS archive contains the executable **and** the two dynamic libraries
+(`libdeflate.0.dylib`, `libLerc.4.dylib`). Keep all three files in the same
+directory; do not copy only the executable.
+
+The macOS binary is ad-hoc signed, not notarised. If macOS quarantines it
+after download, remove the attribute:
+
+```sh
+xattr -d com.apple.quarantine mspa_macOS_ARM
+```
+
+The Windows binaries are not code-signed, so SmartScreen may show a warning;
+choose “More info” → “Run anyway” after verifying the checksum.
+
+## Tested on
+
+* **Linux x86_64** – built on Debian 13; the Debian 11 build (glibc 2.31) was
+  tested on Debian, Ubuntu, Fedora and openSUSE
+* **Linux aarch64** – Debian 13 (native and CI)
+* **macOS ARM64** – Apple Silicon with Homebrew GCC
+* **Windows x86_64** – Windows 10/11 with MSYS2 UCRT64
+* **Windows ARM64** – Windows 11 with MSYS2 CLANGARM64
+
+All five targets produce pixel-identical output for `testing/input.tif`; the
+`deploy.sh` smoke test and the CI matrix verify this automatically.
+
 ## Repository layout
 
 ```
@@ -58,6 +113,9 @@ testing/input.tif       test image used by the automatic smoke test
 testing/reference*.tif  expected pixel output (checked by deploy.sh)
 testing/tiffcmp.c       libtiff based pixel comparison tool
 .github/workflows/      CI build matrix (five targets)
+CITATION.cff            machine-readable citation metadata
+RELEASE.md              release checklist
+packaging/              release packaging script
 ReadmeCompile.docx      detailed build instructions (Word document)
 LICENSE                 GNU General Public License v3
 ```
@@ -221,7 +279,7 @@ directory as a workflow artifact:
 | `Linux_ARM` | `ubuntu-24.04-arm` |
 | `Windows` | `windows-2025` (MSYS2 UCRT64) |
 | `Windows_ARM` | `windows-11-arm` (MSYS2 CLANGARM64) |
-| `macOS_ARM` | `macos-14` (Apple Silicon) |
+| `macOS_ARM` | `macos-15` (Apple Silicon) |
 
 All ARM jobs run natively, so the CI results are not affected by emulation.
 
@@ -249,6 +307,43 @@ Output pixel values follow the MSPA colour code (1 = core, 3 = perforation,
 5 = edge, 9 = loop, 17 = bridge, 33 = branch, 65 = islet, 129 = background,
 220 = internal hole; transition classes add 34/36/38/... for the 8-connected
 foreground).
+
+## Citation
+
+If you use MSPA in a publication, please cite:
+
+* P. Soille and P. Vogt (2009): *Morphological segmentation of binary
+  patterns*. Pattern Recognition Letters 30(4):456–459.
+  <https://doi.org/10.1016/j.patrec.2008.10.015>
+* P. Soille and P. Vogt (2022): *Morphological Spatial Pattern Analysis:
+  open source release*. The International Archives of the Photogrammetry,
+  Remote Sensing and Spatial Information Sciences, XLVIII-4/W1-2022, 427–433.
+  <https://doi.org/10.5194/isprs-archives-XLVIII-4-W1-2022-427-2022>
+
+```bibtex
+@article{soille2009morphological,
+  author  = {Soille, Pierre and Vogt, Peter},
+  title   = {Morphological segmentation of binary patterns},
+  journal = {Pattern Recognition Letters},
+  volume  = {30},
+  number  = {4},
+  pages   = {456--459},
+  year    = {2009},
+  doi     = {10.1016/j.patrec.2008.10.015}
+}
+
+@article{soille2022morphological,
+  author  = {Soille, Pierre and Vogt, Peter},
+  title   = {Morphological Spatial Pattern Analysis: open source release},
+  journal = {The International Archives of the Photogrammetry, Remote Sensing and Spatial Information Sciences},
+  volume  = {XLVIII-4/W1-2022},
+  pages   = {427--433},
+  year    = {2022},
+  doi     = {10.5194/isprs-archives-XLVIII-4-W1-2022-427-2022}
+}
+```
+
+A machine-readable version is available in [`CITATION.cff`](CITATION.cff).
 
 ## License
 
