@@ -491,7 +491,12 @@ IMAGE *uc_fillhole(IMAGE *im, int graph)
 IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int disk)
 {
   IMAGE **iml;
-  IMAGE *core, *outer, *corefill, *loecher, *edges, *core1;
+  IMAGE *core, *outer, *corefill, *loecher, *edges;
+  /* core1 is set either from a copy of core or, in -disk mode, from the
+   * temporary file written below. The initialiser documents that both paths
+   * assign it before use and silences GCC's -Wmaybe-uninitialized false
+   * positive on older compilers (e.g. GCC 10 in Debian 11). */
+  IMAGE *core1 = NULL;
   IMAGE *crt_edges;
   IMAGE *i0;
 #ifdef DEBUG
