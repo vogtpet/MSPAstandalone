@@ -30,6 +30,4 @@ tree compile and run on Linux, MS-Windows and macOS, on x86_64 and aarch64.
 
 ## Reference
 
-`core/c/Makefile_orig` is the unmodified upstream makefile and is kept for
-comparison. The remaining source files are unchanged from the upstream
-snapshot.
+The remaining source files are unchanged from the upstream snapshot.
