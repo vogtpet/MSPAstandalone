@@ -72,24 +72,19 @@ The macOS archive contains the executable **and** the two dynamic libraries
 (`libdeflate.0.dylib`, `libLerc.4.dylib`). Keep all three files in the same
 directory; do not copy only the executable.
 
-The macOS binary is ad-hoc signed, not notarised (it has no Apple Developer
-ID). macOS therefore shows the Gatekeeper warning “Apple could not verify …”
-the first time the downloaded executable is opened. Re-signing it locally
-with `codesign` does not remove this warning; only a Developer ID signature
-plus Apple notarisation does.
-
-To run the downloaded binary, remove the quarantine attribute from the
-extracted folder (the archive contains the executable and both dylibs):
+The macOS binary is ad-hoc signed and not notarised, so Gatekeeper warns about
+downloaded files. After extracting the archive, clear the quarantine from the
+whole folder and run it:
 
 ```sh
-xattr -cr mspa-2.4-macos-arm64
+cd mspa-2.4-macos-arm64
+xattr -cr .
+./mspa_macOS_ARM -help
 ```
 
-Clearing only the executable is not enough: macOS quarantines the two dylibs
-as well, and Gatekeeper then reports `libdeflate.0.dylib` on the next launch.
-
-Alternatively, right-click the executable and choose **Open**, or allow it
-under **System Settings → Privacy & Security → Open Anyway**.
+Clearing only the executable is not enough — the two dylibs are quarantined
+too. Only a Developer ID signature plus Apple notarisation avoids the warning
+entirely.
 
 The Windows binaries are not code-signed, so SmartScreen may show a warning;
 choose “More info” → “Run anyway” after verifying the checksum.

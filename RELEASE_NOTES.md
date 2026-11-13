@@ -16,19 +16,15 @@ For older distributions, build from source on an older release (for example
 Debian 11, glibc 2.31); see the README.
 
 The macOS archive contains the executable and two dynamic libraries; keep
-them together. The binary is ad-hoc signed, not notarised, so macOS shows
-the Gatekeeper warning “Apple could not verify …” on first launch. Remove
-the quarantine attribute from the extracted folder:
+them together. The binary is ad-hoc signed and not notarised. After
+extracting, clear the quarantine from the whole folder and run it:
 
-    xattr -cr mspa-2.4-macos-arm64
+    cd mspa-2.4-macos-arm64
+    xattr -cr .
 
-Clearing only the executable is not enough: macOS quarantines the two dylibs
-as well, and Gatekeeper then reports `libdeflate.0.dylib` on the next launch.
-
-Or right-click the executable and choose Open, or allow it under System
-Settings → Privacy & Security → Open Anyway. Re-signing the binary locally
-does not remove the warning; only an Apple Developer ID signature and
-notarisation do.
+Clearing only the executable is not enough — the two dylibs are quarantined
+too. Only a Developer ID signature plus Apple notarisation avoids the
+warning entirely.
 
 The Windows binaries are unsigned; SmartScreen may show a warning.
 
