@@ -1,19 +1,24 @@
 ## MSPA 2.4 standalone builds
 
-Prebuilt binaries for five platforms. No Python, GDAL, PROJ or miallib
-installation is required on the target machine.
+Prebuilt binaries for five platforms, plus a Linux x86_64 compatibility
+build for older glibc systems. No Python, GDAL, PROJ or miallib installation
+is required on the target machine.
 
 | Platform | File |
 |---|---|
 | Linux x86_64 | `mspa-2.4-linux-x86_64.tar.gz` |
+| Linux x86_64 (older glibc) | `mspa-2.4-linux-x86_64-glibc2.31.tar.gz` |
 | Linux aarch64 | `mspa-2.4-linux-aarch64.tar.gz` |
 | macOS Apple Silicon | `mspa-2.4-macos-arm64.tar.gz` |
 | Windows x86_64 | `mspa-2.4-windows-x86_64.zip` |
 | Windows ARM64 | `mspa-2.4-windows-arm64.zip` |
 
-The Linux binaries are built on Debian 13 and require glibc 2.41 or newer.
-For older distributions, build from source on an older release (for example
-Debian 11, glibc 2.31); see the README.
+The default Linux binaries are built on Debian 13 and require glibc 2.41 or
+newer. The extra `mspa-2.4-linux-x86_64-glibc2.31.tar.gz` archive is built on
+Debian 11 and requires only glibc 2.31 or newer; use it on older distributions
+(for example Ubuntu 20.04/22.04 or Debian 11). It produces identical MSPA
+output. For other architectures, build from source on an older release; see
+the README.
 
 The macOS archive contains the executable and two dynamic libraries; keep
 them together. The binary is ad-hoc signed and not notarised. After

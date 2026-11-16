@@ -49,6 +49,7 @@ Prebuilt binaries are attached to the
 | Archive | Platform |
 |---|---|
 | `mspa-2.4-linux-x86_64.tar.gz` | Linux x86_64 |
+| `mspa-2.4-linux-x86_64-glibc2.31.tar.gz` | Linux x86_64, older glibc (Debian 11 build) |
 | `mspa-2.4-linux-aarch64.tar.gz` | Linux aarch64 / ARM64 |
 | `mspa-2.4-macos-arm64.tar.gz` | macOS Apple Silicon |
 | `mspa-2.4-windows-x86_64.zip` | Windows x86_64 |
@@ -63,9 +64,12 @@ shasum -a 256 -c SHA256SUMS   # macOS
 
 On Windows, check a file with `certutil -hashfile <file> SHA256`.
 
-The Linux binaries are built on Debian 13 and require **glibc 2.41 or newer**.
-If you need to run MSPA on a distribution with an older glibc, build it on an
-older distribution (for example Debian 11, glibc 2.31); see
+The default Linux binaries are built on Debian 13 and require **glibc 2.41 or
+newer**. The extra `...-glibc2.31.tar.gz` archive is built on Debian 11 and
+requires only **glibc 2.31 or newer**; use it on older distributions (for
+example Ubuntu 20.04/22.04 or Debian 11) where the default binary would report
+a GLIBC version error. It produces identical MSPA output. For other
+architectures, build from source on an older distribution; see
 [Building](#building).
 
 The macOS archive contains the executable **and** the two dynamic libraries

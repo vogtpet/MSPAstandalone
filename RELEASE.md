@@ -31,7 +31,8 @@ does not match the host and runs both pixel comparisons:
 
 The official Linux binaries are built on Debian 13 and require glibc 2.41 or
 newer. A Debian 11 build (glibc 2.31) can be produced as a separate
-compatibility build if needed; keep the two clearly labelled.
+compatibility build if needed; keep the two clearly labelled. Name it
+`mspa-<version>-linux-x86_64-glibc2.31.tar.gz` and add it to `SHA256SUMS`.
 
 ## 3. Collect the distribution directories
 
