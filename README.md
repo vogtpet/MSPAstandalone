@@ -48,14 +48,14 @@ Prebuilt binaries are attached to the
 
 | Archive | Platform |
 |---|---|
-| `mspa-2.4-linux-x86_64.tar.gz` | Linux x86_64 |
-| `mspa-2.4-linux-x86_64-glibc2.31.tar.gz` | Linux x86_64, older glibc (Debian 11 build) |
-| `mspa-2.4-linux-aarch64.tar.gz` | Linux aarch64 / ARM64 |
-| `mspa-2.4-macos-arm64.tar.gz` | macOS Apple Silicon |
-| `mspa-2.4-windows-x86_64.zip` | Windows x86_64 |
-| `mspa-2.4-windows-arm64.zip` | Windows ARM64 |
+| [mspa-2.4-linux-x86_64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-linux-x86_64.tar.gz) | Linux x86_64 |
+| [mspa-2.4-linux-x86_64-glibc2.31.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-linux-x86_64-glibc2.31.tar.gz) | Linux x86_64, older glibc (Debian 11 build) |
+| [mspa-2.4-linux-aarch64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-linux-aarch64.tar.gz) | Linux aarch64 / ARM64 |
+| [mspa-2.4-macos-arm64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-macos-arm64.tar.gz) | macOS Apple Silicon |
+| [mspa-2.4-windows-x86_64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-windows-x86_64.zip) | Windows x86_64 |
+| [mspa-2.4-windows-arm64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-windows-arm64.zip) | Windows ARM64 |
 
-Every release also includes a `SHA256SUMS` file:
+Every release also includes a [`SHA256SUMS`](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/SHA256SUMS) file:
 
 ```sh
 sha256sum -c SHA256SUMS       # Linux
@@ -93,6 +93,45 @@ entirely.
 The Windows binaries are not code-signed, so SmartScreen may show a warning;
 choose “More info” → “Run anyway” after verifying the checksum.
 
+## Command line
+
+```
+mspa -i <input> [-o <output>] [-odir <dir>] [-eew <width>]
+     [-graphfg <4|8>] [-internal <0|1>] [-transition <0|1>] [-disk]
+     [-v] [-help|-usage]
+```
+
+| Option        | Meaning                                                        | Default     |
+|---------------|----------------------------------------------------------------|-------------|
+| `-i <file>`   | input image (binary or grey level, TIFF or other miallib format) | required  |
+| `-o <file>`   | output image                                                   | `out.tif`   |
+| `-odir <dir>` | output directory                                               | `./`        |
+| `-eew <n>`    | effective edge width                                           | `1.0`       |
+| `-graphfg <n>`| foreground connectivity (4 or 8)                               | `8`         |
+| `-internal <n>` | include internal holes/disconnected foreground (0/1)         | `1`         |
+| `-transition <n>` | include transition classes (0/1)                           | `1`         |
+| `-disk`       | minimum RAM mode: spool intermediate images to disk            | off         |
+| `-v`          | verbose parameter output                                       | off         |
+
+Output pixel values follow the MSPA colour code (1 = core, 3 = perforation,
+5 = edge, 9 = loop, 17 = bridge, 33 = branch, 65 = islet, 129 = background,
+220 = internal hole; transition classes add 34/36/38/... for the 8-connected
+foreground).
+
+## Example
+
+A minimal run on the binary test image:
+
+```sh
+mspa -i testing/input.tif -o output.tif -odir testing
+```
+
+The left panel shows the binary input (`testing/input.tif`); the right panel
+shows the MSPA output produced with the default parameters. The colours follow
+the MSPA class codes listed above.
+
+![MSPA example: binary input and classified output](docs/example.png)
+
 ## Tested on
 
 * **Linux x86_64** – built on Debian 13; the Debian 11 build (glibc 2.31) was
@@ -123,6 +162,7 @@ mial-master/            miallib source code and public headers
 testing/input.tif       test image used by the automatic smoke test
 testing/reference*.tif  expected pixel output (checked by deploy.sh)
 testing/tiffcmp.c       libtiff based pixel comparison tool
+docs/example.png        example figure used in the README
 .github/workflows/      CI build matrix (five targets)
 CITATION.cff            machine-readable citation metadata
 RELEASE.md              release checklist
@@ -293,31 +333,6 @@ directory as a workflow artifact:
 | `macOS_ARM` | `macos-15` (Apple Silicon) |
 
 All ARM jobs run natively, so the CI results are not affected by emulation.
-
-## Command line
-
-```
-mspa -i <input> [-o <output>] [-odir <dir>] [-eew <width>]
-     [-graphfg <4|8>] [-internal <0|1>] [-transition <0|1>] [-disk]
-     [-v] [-help|-usage]
-```
-
-| Option        | Meaning                                                        | Default     |
-|---------------|----------------------------------------------------------------|-------------|
-| `-i <file>`   | input image (binary or grey level, TIFF or other miallib format) | required  |
-| `-o <file>`   | output image                                                   | `out.tif`   |
-| `-odir <dir>` | output directory                                               | `./`        |
-| `-eew <n>`    | effective edge width                                           | `1.0`       |
-| `-graphfg <n>`| foreground connectivity (4 or 8)                               | `8`         |
-| `-internal <n>` | include internal holes/disconnected foreground (0/1)         | `1`         |
-| `-transition <n>` | include transition classes (0/1)                           | `1`         |
-| `-disk`       | minimum RAM mode: spool intermediate images to disk            | off         |
-| `-v`          | verbose parameter output                                       | off         |
-
-Output pixel values follow the MSPA colour code (1 = core, 3 = perforation,
-5 = edge, 9 = loop, 17 = bridge, 33 = branch, 65 = islet, 129 = background,
-220 = internal hole; transition classes add 34/36/38/... for the 8-connected
-foreground).
 
 ## Citation
 

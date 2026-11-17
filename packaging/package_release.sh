@@ -72,6 +72,7 @@ for entry in "${entries[@]}"; do
     mkdir -p "$top"
     cp -R "$dist"/. "$top"/
     cp LICENSE README.md CITATION.cff "$top"/
+    [ -d docs ] && cp -R docs "$top"/
 
     # Normalise permissions so the archive is usable by whoever extracts it
     chmod -R a+rX "$top"
