@@ -404,8 +404,9 @@ respective library packages.
 
 ## Upstream modifications
 
-`source/mial-master/` is a snapshot of the JRC miallib source. The upstream code was
-written for Linux x86_64. The following changes make the same source tree
+The source code of MSPAstandalone (`source/`) is based on a snapshot of the JRC
+sources [miallib](https://github.com/ec-jrc/jeolib-miallib). The upstream code
+was written for Linux x86_64. The following changes make the same source tree
 compile and run on Windows and macOS, on x86_64 and aarch64:
 
 * the build system detects the target architecture and the compiler
