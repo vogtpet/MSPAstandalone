@@ -24,6 +24,14 @@ References:
 MSPA is also part of [GuidosToolbox](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/)
 and the GuidosToolbox Workbench.
 
+MSPA-related [publications](https://scholar.google.com/scholar?q=%28%22morphological+spatial+pattern+analysis%22+OR+MSPA%29+%28connectivity+OR+fragmentation%29).
+
+The image below illustrates the MSPA segmentation procedure of a binary mask:
+
+![MSPA segmentation procedure](docs/mspa_procedure.gif)
+
+*Source: [JRC MSPA page](https://forest.jrc.ec.europa.eu/en/activities/lpa/mspa/).*
+
 ## Supported platforms
 
 | Target        | Operating system            | CPU        | Toolchain                     |
@@ -39,7 +47,7 @@ CPU-specific instruction sets), so a binary built for `x86_64` runs on any
 Intel or AMD x86_64 CPU, and a binary built for `aarch64` runs on any ARMv8-A
 compatible CPU. The minimum macOS version of the macOS binary is the
 deployment target of your GCC toolchain (macOS 11 or later for Apple Silicon);
-lower it with `-mmacosx-version-min` in `Makefile_macOS_ARM` if needed.
+lower it with `-mmacosx-version-min` in `source/Makefile_macOS_ARM` if needed.
 
 ## Download
 
@@ -123,10 +131,10 @@ foreground).
 A minimal run on the binary test image:
 
 ```sh
-mspa -i testing/input.tif -o output.tif -odir testing
+mspa -i source/testing/input.tif -o output.tif -odir source/testing
 ```
 
-The left panel shows the binary input (`testing/input.tif`); the right panel
+The left panel shows the binary input (`source/testing/input.tif`); the right panel
 shows the MSPA output produced with the default parameters. The colours follow
 the MSPA class codes listed above.
 
@@ -141,33 +149,33 @@ the MSPA class codes listed above.
 * **Windows x86_64** – Windows 10/11 with MSYS2 UCRT64
 * **Windows ARM64** – Windows 11 with MSYS2 CLANGARM64
 
-All five targets produce pixel-identical output for `testing/input.tif`; the
-`deploy.sh` smoke test and the CI matrix verify this automatically.
+All five targets produce pixel-identical output for `source/testing/input.tif`; the
+`source/deploy.sh` smoke test and the CI matrix verify this automatically.
 
 ## Repository layout
 
 ```
-Makefile_Linux          driver makefiles (one per target)
-Makefile_Linux_ARM
-Makefile_macOS_ARM
-Makefile_Windows
-Makefile_Windows_ARM
-deploy.sh               builds the library, the binary and the distribution
-corridor_lightmemt.c    MSPA driver (legacy name; referred to as fsp.c)
-frag.c / frag.h         command line handling
-mia_parse.c / .h        generic argument parser
-mial-master/            miallib source code and public headers
+source/                 all files needed to build and test MSPA
+  Makefile_Linux        driver makefiles (one per target)
+  Makefile_Linux_ARM
+  Makefile_macOS_ARM
+  Makefile_Windows
+  Makefile_Windows_ARM
+  deploy.sh             builds the library, the binary and the distribution
+  corridor_lightmemt.c  MSPA driver (legacy name; referred to as fsp.c)
+  frag.c / frag.h       command line handling
+  mia_parse.c / .h      generic argument parser
+  ReadmeCompile.docx    detailed build instructions (Word document)
+  mial-master/          miallib source code and public headers
                         (the driver includes them directly; see
                         "Upstream modifications")
-testing/input.tif       test image used by the automatic smoke test
-testing/reference*.tif  expected pixel output (checked by deploy.sh)
-testing/tiffcmp.c       libtiff based pixel comparison tool
+  testing/              smoke test image, reference outputs and comparison tool
 docs/example.png        example figure used in the README
+docs/mspa_procedure.gif MSPA segmentation procedure animation (JRC)
 .github/workflows/      CI build matrix (five targets)
 CITATION.cff            machine-readable citation metadata
 RELEASE.md              release checklist
 packaging/              release packaging script
-ReadmeCompile.docx      detailed build instructions (Word document)
 LICENSE                 GNU General Public License v3
 ```
 
@@ -179,6 +187,8 @@ platform libraries listed below. It refuses to build a target that does not
 match the host operating system and CPU architecture, because the makefiles
 do not cross-compile. The compiler can be overridden with `MSPA_CC=<compiler>`;
 on macOS the installed Homebrew GCC is detected automatically.
+
+All files needed to build and test MSPA are in [`source/`](source/) — the makefiles, driver sources, miallib, `deploy.sh` and the detailed build document.
 
 ### Linux x86_64 and Linux aarch64
 
@@ -196,8 +206,8 @@ sudo apt install build-essential gcc g++ make libgomp1 \
 Then run one of:
 
 ```sh
-./deploy.sh Linux
-./deploy.sh Linux_ARM
+./source/deploy.sh Linux
+./source/deploy.sh Linux_ARM
 ```
 
 The Linux binaries are dynamically linked against the system C library. A
@@ -226,7 +236,7 @@ Copy the repository into your MSYS2 home directory
 (`C:\msys64\home\<user>\`), change into it and run:
 
 ```sh
-./deploy.sh Windows
+./source/deploy.sh Windows
 ```
 
 ### MS-Windows ARM64 (MSYS2 CLANGARM64)
@@ -250,7 +260,7 @@ pacman -S --needed \
 Then run:
 
 ```sh
-./deploy.sh Windows_ARM
+./source/deploy.sh Windows_ARM
 ```
 
 ### macOS (Apple Silicon)
@@ -265,7 +275,7 @@ brew install gcc liblerc libdeflate libtiff jpeg-turbo \
 Then run:
 
 ```sh
-./deploy.sh macOS_ARM
+./source/deploy.sh macOS_ARM
 ```
 
 The installed Homebrew GCC is detected automatically (the newest version if
@@ -273,22 +283,22 @@ several are installed), so the build keeps working after a GCC upgrade. To
 select a specific compiler, set `MSPA_CC`:
 
 ```sh
-MSPA_CC=/opt/homebrew/bin/gcc-15 ./deploy.sh macOS_ARM
+MSPA_CC=/opt/homebrew/bin/gcc-15 ./source/deploy.sh macOS_ARM
 ```
 
-`deploy.sh` bundles the two remaining dynamic libraries (`libdeflate` and
+`source/deploy.sh` bundles the two remaining dynamic libraries (`libdeflate` and
 `libLerc`) and rewrites their paths to `@executable_path`, so the whole
-`mspa_dist_macOS_ARM/` directory can be copied to another Mac without
+`source/mspa_dist_macOS_ARM/` directory can be copied to another Mac without
 Homebrew.
 
-## What `deploy.sh` does
+## What `source/deploy.sh` does
 
 1. checks that the requested target matches the host OS and CPU architecture;
-2. builds the static library `libmiallib_mspa.a` from `mial-master/core/c`;
+2. builds the static library `libmiallib_mspa.a` from `source/mial-master/core/c`;
 3. compiles the MSPA driver with the platform makefile;
-4. creates `mspa_dist_<target>/` and copies the executable;
+4. creates `source/mspa_dist_<target>/` and copies the executable;
 5. on macOS, bundles and re-signs the dynamic libraries;
-6. runs the test image `testing/input.tif` twice (default parameters and
+6. runs the test image `source/testing/input.tif` twice (default parameters and
    `-graphfg 4 -internal 0`) and compares both outputs pixel by pixel with
    the reference images;
 7. removes the intermediate object files and the static library.
@@ -297,26 +307,26 @@ If any step fails, the script stops with a non-zero exit status.
 
 ## Testing
 
-`deploy.sh` runs two test cases and compares both results pixel by pixel with
-the reference images in `testing/`:
+`source/deploy.sh` runs two test cases and compares both results pixel by pixel with
+the reference images in `source/testing/`:
 
 ```sh
-./deploy.sh macOS_ARM
+./source/deploy.sh macOS_ARM
 # ... builds and runs:
 #   mspa -i input.tif -o output.tif -odir ./
 #   mspa -i input.tif -o output_nondefault.tif -odir ./ -graphfg 4 -internal 0
-# ... then verifies output*.tif against testing/reference*.tif
+# ... then verifies output*.tif against source/testing/reference*.tif
 ```
 
-The comparison uses `testing/tiffcmp.c`, a small tool built against libtiff
+The comparison uses `source/testing/tiffcmp.c`, a small tool built against libtiff
 (no Python, GDAL or ImageMagick needed). It fails the build if a single pixel
 differs. Set `MSPA_SKIP_VERIFY=1` to skip this check, for example while
 experimenting with a modified algorithm.
 
 The TIFF output contains a `Software` tag and a timestamp, so two runs are not
-byte-identical; only the pixel values are compared. `testing/compare_outputs.py`
+byte-identical; only the pixel values are compared. `source/testing/compare_outputs.py`
 is an alternative comparison script (requires Pillow), and
-`testing/README.md` lists the expected class counts for the test image.
+`source/testing/README.md` lists the expected class counts for the test image.
 
 ## Continuous integration
 
@@ -384,7 +394,7 @@ FOR A PARTICULAR PURPOSE.
 ## Third-party components
 
 The binaries link the following libraries. Their licences are compatible with
-the GPL; the upstream notices are retained in `mial-master/` and in the
+the GPL; the upstream notices are retained in `source/mial-master/` and in the
 respective library packages.
 
 * miallib (JRC, GPL-3.0-or-later) – image processing library
@@ -394,7 +404,7 @@ respective library packages.
 
 ## Upstream modifications
 
-`mial-master/` is a snapshot of the JRC miallib source. The upstream code was
+`source/mial-master/` is a snapshot of the JRC miallib source. The upstream code was
 written for Linux x86_64. The following changes make the same source tree
 compile and run on Windows and macOS, on x86_64 and aarch64:
 
@@ -408,9 +418,9 @@ compile and run on Windows and macOS, on x86_64 and aarch64:
   TIFF software tag and input handling remain unchanged.
 
 The exact list of modified files is in
-[`mial-master/MODIFICATIONS.md`](mial-master/MODIFICATIONS.md).
+[`source/mial-master/MODIFICATIONS.md`](source/mial-master/MODIFICATIONS.md).
 
 ## Documentation
 
-`ReadmeCompile.docx` contains the detailed, illustrated build instructions for
+`source/ReadmeCompile.docx` contains the detailed, illustrated build instructions for
 all supported platforms. This README is the quick reference.

@@ -1,6 +1,6 @@
 # Test image and reference results
 
-`input.tif` is a 1000 x 1000 binary test image. `deploy.sh` runs the freshly
+`input.tif` is a 1000 x 1000 binary test image. `source/deploy.sh` runs the freshly
 built binary on this image twice:
 
 ```sh
@@ -16,7 +16,7 @@ The TIFF writer stores a timestamp and the software version, so two runs are
 not necessarily byte-identical even when the pixel data is identical. Compare
 the pixel values instead.
 
-`deploy.sh` does this automatically: it compiles `tiffcmp.c` with libtiff and
+`source/deploy.sh` does this automatically: it compiles `tiffcmp.c` with libtiff and
 compares the two test outputs with `reference.tif` and
 `reference_nondefault.tif`. The build fails on the first differing pixel.
 Set `MSPA_SKIP_VERIFY=1` to skip the comparison.

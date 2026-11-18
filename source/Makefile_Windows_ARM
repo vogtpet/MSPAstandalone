@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # MSPA driver makefile - MS-Windows aarch64 / ARM64 (MSYS2 CLANGARM64)
 #
-# Do not run this makefile directly: use ./deploy.sh Windows_ARM, which
+# Do not run this makefile directly: use ./source/deploy.sh Windows_ARM, which
 # builds the static library libmiallib_mspa.a (in mial-master/core/c) first.
 #
 # CPU portability: no -march / -march=native is used, so the binary runs on
@@ -48,8 +48,6 @@ fsp$(EXE): $(OBJ_FSP) libmiallib_mspa.a
 	-$(RM) fsp$(EXE) mspa_win64_ARM$(EXE)
 	$(LD) $(LDFLAGS) -o fsp$(EXE) $(OBJ_FSP) $(LDLIBS)
 	$(CP) fsp$(EXE) mspa_win64_ARM$(EXE)
-
-MIALINC = mial-master/core/c
 
 %.o: %.c $(MIALINC)/miallib.h $(MIALINC)/mialtypes.h \
        $(MIALINC)/config_miallib.h $(MIALINC)/op.h mia_parse.h frag.h

@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # MSPA driver makefile - macOS aarch64 / Apple Silicon (Homebrew GCC)
 #
-# Do not run this makefile directly: use ./deploy.sh macOS_ARM, which builds
+# Do not run this makefile directly: use ./source/deploy.sh macOS_ARM, which builds
 # the static library libmiallib_mspa.a (in mial-master/core/c) first and
 # bundles the two remaining dynamic libraries with install_name_tool.
 #
@@ -20,7 +20,7 @@ OBJ_FSP = corridor_lightmemt.o frag.o mia_parse.o
 MIALINC = mial-master/core/c
 
 # Use the installed Homebrew GCC. The major version is detected at build time;
-# override with `make CC=...` or through deploy.sh / MSPA_CC.
+# override with `make CC=...` or through source/deploy.sh / MSPA_CC.
 ifeq ($(origin CC),default)
     GCC_MAJOR := $(shell brew list --versions gcc 2>/dev/null | awk '{print $$2}' | cut -d. -f1)
     CC = $(if $(GCC_MAJOR),gcc-$(GCC_MAJOR),gcc-16)
@@ -63,8 +63,6 @@ fsp: $(OBJ_FSP) libmiallib_mspa.a
 		-ldeflate -llerc -lz -lstdc++ -lpthread -lm -ldl
 	strip fsp
 	cp fsp $(OUTPUT_BIN)
-
-MIALINC = mial-master/core/c
 
 %.o: %.c $(MIALINC)/miallib.h $(MIALINC)/mialtypes.h \
        $(MIALINC)/config_miallib.h $(MIALINC)/op.h mia_parse.h frag.h

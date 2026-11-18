@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # MSPA driver makefile - MS-Windows x86_64 (MSYS2 UCRT64, GCC)
 #
-# Do not run this makefile directly: use ./deploy.sh Windows, which builds
+# Do not run this makefile directly: use ./source/deploy.sh Windows, which builds
 # the static library libmiallib_mspa.a (in mial-master/core/c) first.
 #
 # CPU portability: -mtune=generic only affects instruction scheduling; no
@@ -49,8 +49,6 @@ fsp$(EXE): $(OBJ_FSP) libmiallib_mspa.a
 	-$(RM) fsp$(EXE) mspa_win64$(EXE)
 	$(CC) $(LDFLAGS) -o fsp$(EXE) $(OBJ_FSP) $(LDLIBS)
 	$(CP) fsp$(EXE) mspa_win64$(EXE)
-
-MIALINC = mial-master/core/c
 
 %.o: %.c $(MIALINC)/miallib.h $(MIALINC)/mialtypes.h \
        $(MIALINC)/config_miallib.h $(MIALINC)/op.h mia_parse.h frag.h

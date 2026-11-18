@@ -7,7 +7,7 @@ UNAME_M := $(shell uname -m)
 
 BASE       = miallib
 TARGET     = lib$(BASE)
-# Respect CC/CXX given on the command line or in the environment (deploy.sh
+# Respect CC/CXX given on the command line or in the environment (source/deploy.sh
 # passes the compiler of the target, e.g. the Homebrew GCC on macOS). Only fall back
 # to gcc/c++ when make's built-in default is in use.
 ifeq ($(origin CC),default)

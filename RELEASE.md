@@ -9,25 +9,25 @@ binaries. The current version is **2.4** (the same version shown by
 - `git status` must be clean and `main` up to date.
 - The CI matrix must be green on the commit that will be tagged.
 - If the version changes, update:
-  - `mia_parse.h` (`MIA_ADVERTISE`)
-  - `corridor_lightmemt.c` (the `desc` string)
-  - `mial-master/core/c/imio.c` (the TIFF `Software` tag)
+  - `source/mia_parse.h` (`MIA_ADVERTISE`)
+  - `source/corridor_lightmemt.c` (the `desc` string)
+  - `source/mial-master/core/c/imio.c` (the TIFF `Software` tag)
   - `README.md` (archive names and version)
   - `CITATION.cff` (`version`, `date-released`)
 - Commit and push.
 
 ## 2. Build all five targets
 
-Build from the same commit on each machine. `deploy.sh` refuses a target that
+Build from the same commit on each machine. `source/deploy.sh` refuses a target that
 does not match the host and runs both pixel comparisons:
 
 | Target | Build host | Command |
 |---|---|---|
-| `Linux` | Debian 13 x86_64 | `./deploy.sh Linux` |
-| `Linux_ARM` | Debian 13 aarch64 | `./deploy.sh Linux_ARM` |
-| `macOS_ARM` | Apple Silicon, Homebrew GCC | `./deploy.sh macOS_ARM` |
-| `Windows` | MSYS2 UCRT64 | `./deploy.sh Windows` |
-| `Windows_ARM` | MSYS2 CLANGARM64 | `./deploy.sh Windows_ARM` |
+| `Linux` | Debian 13 x86_64 | `./source/deploy.sh Linux` |
+| `Linux_ARM` | Debian 13 aarch64 | `./source/deploy.sh Linux_ARM` |
+| `macOS_ARM` | Apple Silicon, Homebrew GCC | `./source/deploy.sh macOS_ARM` |
+| `Windows` | MSYS2 UCRT64 | `./source/deploy.sh Windows` |
+| `Windows_ARM` | MSYS2 CLANGARM64 | `./source/deploy.sh Windows_ARM` |
 
 The official Linux binaries are built on Debian 13 and require glibc 2.41 or
 newer. A Debian 11 build (glibc 2.31) can be produced as a separate
@@ -37,14 +37,14 @@ compatibility build if needed; keep the two clearly labelled. Name it
 ## 3. Collect the distribution directories
 
 Copy the five `mspa_dist_*` directories from the build machines into the
-repository root:
+`source/` directory:
 
 ```
-mspa_dist_linux/
-mspa_dist_linux_ARM/
-mspa_dist_macOS_ARM/
-mspa_dist_windows/
-mspa_dist_windows_ARM/
+source/mspa_dist_linux/
+source/mspa_dist_linux_ARM/
+source/mspa_dist_macOS_ARM/
+source/mspa_dist_windows/
+source/mspa_dist_windows_ARM/
 ```
 
 They are ignored by git. Do not commit them.
@@ -116,7 +116,7 @@ The Windows binaries are unsigned; SmartScreen may show a warning.
 Verify the downloads with the attached `SHA256SUMS` file.
 
 All five targets produce pixel-identical output for the test image
-`testing/input.tif`; the build and the CI matrix verify this automatically.
+`source/testing/input.tif`; the build and the CI matrix verify this automatically.
 ```
 
 ## 8. Verify

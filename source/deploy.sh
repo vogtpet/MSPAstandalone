@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # Build, bundle and smoke-test the standalone MSPA binary.
 #
-# Usage: ./deploy.sh <target>
+# Usage: ./source/deploy.sh <target>
 #
 # The script builds the static miallib library, compiles the MSPA driver,
 # creates a self-contained distribution directory and runs a test image
@@ -11,18 +11,18 @@
 set -euo pipefail
 
 if [ -z "${BASH_VERSION:-}" ]; then
-    echo "ERROR: this script must be run with bash (e.g. ./deploy.sh Linux)."
+    echo "ERROR: this script must be run with bash (e.g. ./source/deploy.sh Linux)."
     exit 1
 fi
 
 trap 'echo "ERROR: build failed at line $LINENO." >&2' ERR
 
-base_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+base_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$base_dir"
 
 usage() {
     cat <<'EOF'
-Usage: ./deploy.sh <target>
+Usage: ./source/deploy.sh <target>
 
 Targets:
   Linux         Linux x86_64 (glibc based, e.g. Debian/Ubuntu)
@@ -86,9 +86,12 @@ case "$target" in
         ;;
 esac
 
+BUILD_BIN="source/$BINARY_NAME"
+DIST_DIR="source/$DIST_DIR"
+
 # --- Host / target compatibility -------------------------------------------
 # The makefiles do not cross-compile: a target must be built on the platform
-# it is meant for. Without this check, for example ./deploy.sh Linux_ARM on
+# it is meant for. Without this check, for example ./source/deploy.sh Linux_ARM on
 # an x86_64 host would silently produce an x86_64 binary called
 # mspa_linux_ARM.
 target_os() {
@@ -144,7 +147,7 @@ if [ "$host_os" != "$want_os" ] || [ "$host_arch" != "$want_arch" ]; then
         found=false
         for candidate in Linux Linux_ARM macOS_ARM Windows Windows_ARM; do
             if [ "$(target_os "$candidate")/$(target_arch "$candidate")" = "$host_os/$host_arch" ]; then
-                echo "  ./deploy.sh $candidate"
+                echo "  ./source/deploy.sh $candidate"
                 found=true
             fi
         done
@@ -155,15 +158,15 @@ if [ "$host_os" != "$want_os" ] || [ "$host_arch" != "$want_arch" ]; then
     exit 1
 fi
 
-if [ ! -f "$MAKEFILE" ]; then
-    echo "ERROR: $MAKEFILE not found in $base_dir"
+if [ ! -f "source/$MAKEFILE" ]; then
+    echo "ERROR: source/$MAKEFILE not found in $base_dir"
     exit 1
 fi
 
 # Pixel comparison tool (no Python/ImageMagick dependency, uses libtiff)
 case "$target" in
-    "Windows"|"Windows_ARM") TIFFCMP="testing/tiffcmp.exe" ;;
-    *)                       TIFFCMP="testing/tiffcmp" ;;
+    "Windows"|"Windows_ARM") TIFFCMP="source/testing/tiffcmp.exe" ;;
+    *)                       TIFFCMP="source/testing/tiffcmp" ;;
 esac
 
 # Number of parallel compile jobs (portable across Linux, macOS and MSYS2)
@@ -225,23 +228,23 @@ echo "==> C compiler:      $LIB_CC${cc_version:+ ($cc_version)}"
 
 # 1. Build the static miallib library and copy it next to this script
 echo "==> Building libmiallib_mspa.a with $LIB_CC"
-make -C mial-master/core/c clean
-make -C mial-master/core/c -j"$jobs" \
+make -C source/mial-master/core/c clean
+make -C source/mial-master/core/c -j"$jobs" \
      CC="$LIB_CC" EXTRA_CFLAGS="$EXTRA_CFLAGS" \
      ../build/lib/libmiallib_mspa.a
-if [ ! -f mial-master/core/build/lib/libmiallib_mspa.a ]; then
+if [ ! -f source/mial-master/core/build/lib/libmiallib_mspa.a ]; then
     echo "ERROR: libmiallib_mspa.a was not created."
     exit 1
 fi
-cp -f mial-master/core/build/lib/libmiallib_mspa.a .
+cp -f source/mial-master/core/build/lib/libmiallib_mspa.a source/
 
 # 2. Compile the driver
-echo "==> Compiling $BINARY_NAME with $MAKEFILE"
-make -f "$MAKEFILE" clean
-make -f "$MAKEFILE" CC="$LIB_CC"
+echo "==> Compiling source/$BINARY_NAME with source/$MAKEFILE"
+make -C source -f "$MAKEFILE" clean
+make -C source -f "$MAKEFILE" CC="$LIB_CC"
 
-if [ ! -f "$BINARY_NAME" ]; then
-    echo "ERROR: $BINARY_NAME was not created."
+if [ ! -f "$BUILD_BIN" ]; then
+    echo "ERROR: $BUILD_BIN was not created."
     exit 1
 fi
 
@@ -253,9 +256,9 @@ if command -v file >/dev/null 2>&1; then
         Linux|Windows) arch_pattern="x86-64" ;;
         *)             arch_pattern="aarch64|arm64" ;;
     esac
-    if ! file "$BINARY_NAME" | grep -Eqi "$arch_pattern"; then
-        echo "ERROR: $BINARY_NAME was built for the wrong CPU architecture:"
-        file "$BINARY_NAME"
+    if ! file "$BUILD_BIN" | grep -Eqi "$arch_pattern"; then
+        echo "ERROR: $BUILD_BIN was built for the wrong CPU architecture:"
+        file "$BUILD_BIN"
         echo "Expected $want_arch (matching '$arch_pattern')."
         exit 1
     fi
@@ -265,7 +268,7 @@ fi
 echo "==> Creating $DIST_DIR/"
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
-cp -f "$BINARY_NAME" "$DIST_DIR/"
+cp -f "$BUILD_BIN" "$DIST_DIR/"
 
 # 4. macOS: bundle the remaining dynamic libraries
 if [ "$IS_MAC" = true ]; then
@@ -312,8 +315,12 @@ fi
 
 # 5. Smoke test with the bundled binary
 echo "==> Running smoke tests"
-test_dir="$base_dir/testing"
-mkdir -p "$test_dir"
+test_dir="$base_dir/source/testing"
+if [ ! -f "$test_dir/input.tif" ]; then
+    echo "ERROR: $test_dir/input.tif not found."
+    echo "       The smoke test needs the complete source/ tree."
+    exit 1
+fi
 cp -f "$DIST_DIR"/* "$test_dir"/
 rm -f "$test_dir/output.tif" "$test_dir/output_nondefault.tif"
 
@@ -354,23 +361,23 @@ else
         tiff_lib="-L$BREW_PREFIX/lib"
     fi
     "$LIB_CC" -std=c99 -O2 -Wall $tiff_inc -o "$TIFFCMP" \
-        testing/tiffcmp.c $tiff_lib -ltiff -lm
+        source/testing/tiffcmp.c $tiff_lib -ltiff -lm
 
-    if [ -f testing/reference.tif ] && [ -f testing/reference_nondefault.tif ]; then
-        echo "==> Verifying output.tif against testing/reference.tif"
-        "$TIFFCMP" testing/reference.tif testing/output.tif
-        echo "==> Verifying output_nondefault.tif against testing/reference_nondefault.tif"
-        "$TIFFCMP" testing/reference_nondefault.tif testing/output_nondefault.tif
+    if [ -f source/testing/reference.tif ] && [ -f source/testing/reference_nondefault.tif ]; then
+        echo "==> Verifying output.tif against source/testing/reference.tif"
+        "$TIFFCMP" source/testing/reference.tif source/testing/output.tif
+        echo "==> Verifying output_nondefault.tif against source/testing/reference_nondefault.tif"
+        "$TIFFCMP" source/testing/reference_nondefault.tif source/testing/output_nondefault.tif
     else
-        echo "WARNING: reference images not found in testing/; skipping pixel comparison."
+        echo "WARNING: reference images not found in source/testing/; skipping pixel comparison."
     fi
 fi
 
 # 6. Remove intermediate build files
 echo "==> Cleaning up intermediate files"
-make -C mial-master/core/c clean
-make -f "$MAKEFILE" clean
-rm -f libmiallib_mspa.a
+make -C source/mial-master/core/c clean
+make -C source -f "$MAKEFILE" clean
+rm -f source/libmiallib_mspa.a
 rm -f "$TIFFCMP"
 
 echo

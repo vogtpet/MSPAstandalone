@@ -12,34 +12,33 @@ mspa_macOS_ARM
 mspa_win64.exe
 mspa_win64_ARM.exe
 
-mspa_dist_*/
-mspa_dist_*/*
+source/mspa_dist_*/
 
 # miallib build tree and generated files
-mial-master/core/build/
-mial-master/xlisp/build/
-mial-master/core/c/banner.h
-mial-master/xlisp/c/banner_mialib.h
+source/mial-master/core/build/
+source/mial-master/xlisp/build/
+source/mial-master/core/c/banner.h
+source/mial-master/xlisp/c/banner_mialib.h
 
 # Files ignored by the upstream miallib project (not part of this build)
-mial-master/core/c/alloc.c
-mial-master/core/c/alloc.h
-mial-master/core/c/cluster.c
-mial-master/core/c/cluster.h
-mial-master/core/c/error.c
-mial-master/core/c/error.h
-mial-master/core/c/graph.c
+source/mial-master/core/c/alloc.c
+source/mial-master/core/c/alloc.h
+source/mial-master/core/c/cluster.c
+source/mial-master/core/c/cluster.h
+source/mial-master/core/c/error.c
+source/mial-master/core/c/error.h
+source/mial-master/core/c/graph.c
 
 # ---------------------------------------------------------------------------
-# Test run artifacts (the test image testing/input.tif is tracked)
+# Test run artifacts (the test image source/testing/input.tif is tracked)
 # ---------------------------------------------------------------------------
-testing/mspa_*
-testing/*.dylib
-testing/*.dll
-testing/output*.tif
-testing/output_nondefault.tif
-testing/tiffcmp
-testing/tiffcmp.exe
+source/testing/mspa_*
+source/testing/*.dylib
+source/testing/*.dll
+source/testing/output*.tif
+source/testing/output_nondefault.tif
+source/testing/tiffcmp
+source/testing/tiffcmp.exe
 
 # Release packaging
 release/
@@ -47,3 +46,4 @@ release/
 ._*
 *.swp
 *~
+~$*

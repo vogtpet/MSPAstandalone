@@ -6,8 +6,8 @@
 #
 #   <version> is the release version without the leading "v", e.g. 2.4.
 #
-# The five mspa_dist_* directories must be present in the repository root.
-# They are created by ./deploy.sh <target> on the respective machines and
+# The five mspa_dist_* directories must be present in the source/ directory.
+# They are created by ./source/deploy.sh <target> on the respective machines and
 # are ignored by git. The script creates release/mspa-<version>/ with one
 # archive per platform and a SHA256SUMS file.
 # ---------------------------------------------------------------------------
@@ -43,11 +43,11 @@ staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 
 entries=(
-    "linux-x86_64:mspa_dist_linux"
-    "linux-aarch64:mspa_dist_linux_ARM"
-    "macos-arm64:mspa_dist_macOS_ARM"
-    "windows-x86_64:mspa_dist_windows"
-    "windows-arm64:mspa_dist_windows_ARM"
+    "linux-x86_64:source/mspa_dist_linux"
+    "linux-aarch64:source/mspa_dist_linux_ARM"
+    "macos-arm64:source/mspa_dist_macOS_ARM"
+    "windows-x86_64:source/mspa_dist_windows"
+    "windows-arm64:source/mspa_dist_windows_ARM"
 )
 
 echo "Packaging MSPA $version"
@@ -58,7 +58,7 @@ for entry in "${entries[@]}"; do
 
     if [ ! -d "$dist" ]; then
         echo "ERROR: $dist not found." >&2
-        echo "       Build the corresponding target with ./deploy.sh and copy" >&2
+        echo "       Build the corresponding target with ./source/deploy.sh and copy" >&2
         echo "       the directory into $(pwd)." >&2
         exit 1
     fi

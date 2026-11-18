@@ -99,17 +99,17 @@ jobs:
       - name: Build and test (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
-        run: bash ./deploy.sh ${{ matrix.target }}
+        run: bash ./source/deploy.sh ${{ matrix.target }}
 
       - name: Build and test (Linux and macOS)
         if: runner.os != 'Windows'
-        run: bash ./deploy.sh ${{ matrix.target }}
+        run: bash ./source/deploy.sh ${{ matrix.target }}
 
       - name: Upload the standalone binary
         uses: actions/upload-artifact@v6
         with:
           name: mspa-${{ matrix.target }}
-          path: mspa_dist_*/
+          path: source/mspa_dist_*/
           if-no-files-found: error
 
   hygiene:

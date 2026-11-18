@@ -1,12 +1,12 @@
 # ---------------------------------------------------------------------------
-# MSPA driver makefile - Linux x86_64 (64 bit)
+# MSPA driver makefile - Linux aarch64 / ARM64 (64 bit)
 #
-# Do not run this makefile directly: use ./deploy.sh Linux, which builds the
-# static library libmiallib_mspa.a (in mial-master/core/c) first.
+# Do not run this makefile directly: use ./source/deploy.sh Linux_ARM, which builds
+# the static library libmiallib_mspa.a (in mial-master/core/c) first.
 #
-# CPU portability: no -march / -march=native is used. The binary therefore
-# runs on any x86_64 CPU, Intel or AMD. -mtune=generic only affects
-# instruction scheduling and does not enable CPU specific instructions.
+# CPU portability: no -march / -march=native is used, so the binary runs on
+# any ARMv8-A (aarch64) CPU. The compiler default already targets the
+# baseline architecture of the distribution.
 # ---------------------------------------------------------------------------
 
 OBJ_FSP = corridor_lightmemt.o frag.o mia_parse.o
@@ -15,14 +15,11 @@ MIALINC = mial-master/core/c
 
 CC = gcc
 
-CFLAGS = -std=c99 -O2 -m64 -mtune=generic -Wall -fopenmp \
+CFLAGS = -std=c99 -O2 -Wall -fopenmp \
          -DFSP -DOPENMP -DNO_BUF -I$(MIALINC)
 
 LDFLAGS = -O2 -fopenmp -static-libgcc -s
 
-# Libraries are listed from the highest to the lowest level so that the
-# static linker can resolve every symbol (a library must follow the
-# libraries that use it).
 LDLIBS = -Wl,--whole-archive libmiallib_mspa.a -Wl,--no-whole-archive \
          -Wl,-Bstatic \
          -ltiff -lpng -lwebp -ljpeg -ljbig -lLerc -lsharpyuv \
@@ -32,15 +29,13 @@ LDLIBS = -Wl,--whole-archive libmiallib_mspa.a -Wl,--no-whole-archive \
 
 fsp: $(OBJ_FSP) libmiallib_mspa.a
 	$(CC) $(LDFLAGS) -o fsp $(OBJ_FSP) $(LDLIBS)
-	cp fsp mspa_linux
-
-MIALINC = mial-master/core/c
+	cp fsp mspa_linux_ARM
 
 %.o: %.c $(MIALINC)/miallib.h $(MIALINC)/mialtypes.h \
        $(MIALINC)/config_miallib.h $(MIALINC)/op.h mia_parse.h frag.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	-rm -f *.o fsp mspa_linux
+	-rm -f *.o fsp mspa_linux_ARM
 
 .PHONY: clean
