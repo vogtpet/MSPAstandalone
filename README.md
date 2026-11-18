@@ -21,9 +21,12 @@ References:
   open source release*. ISPRS Archives XLVIII-4/W1-2022, 427–433.
   <https://doi.org/10.5194/isprs-archives-XLVIII-4-W1-2022-427-2022>
 
-MSPA is also part of [GuidosToolbox](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/)
-and the GuidosToolbox Workbench.
-
+MSPA is included in the following free software packages:
+[GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/),
+[GuidosToolbox Workbench (GWB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gwb/),
+and [pyGuidos](https://pyguidos-d46552.pages.code.europa.eu/index.html).
+Additional information can be found on the
+[MSPA homepage](https://forest.jrc.ec.europa.eu/en/activities/lpa/mspa/) and in
 MSPA-related [publications](https://scholar.google.com/scholar?q=%28%22morphological+spatial+pattern+analysis%22+OR+MSPA%29+%28connectivity+OR+fragmentation%29).
 
 The image below illustrates the MSPA segmentation procedure of a binary mask:
