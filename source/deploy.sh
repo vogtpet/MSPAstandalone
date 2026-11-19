@@ -20,6 +20,11 @@ trap 'echo "ERROR: build failed at line $LINENO." >&2' ERR
 base_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$base_dir"
 
+# Minimum macOS version of the macOS build. The makefile applies this to the
+# compiler and linker; it is exported here so that the value used for the
+# check below is the same.
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+
 usage() {
     cat <<'EOF'
 Usage: ./source/deploy.sh <target>
@@ -311,6 +316,20 @@ if command -v file >/dev/null 2>&1; then
     file "$DIST_DIR/$BINARY_NAME"
 else
     ls -lh "$DIST_DIR/$BINARY_NAME"
+fi
+
+if [ "$IS_MAC" = true ] && command -v otool >/dev/null 2>&1; then
+    minos="$(otool -l "$DIST_DIR/$BINARY_NAME" \
+        | awk '/LC_BUILD_VERSION/{found=1} found && /minos/{print $2; exit}')"
+    echo "==> Minimum macOS version: ${minos:-unknown} (requested: $MACOSX_DEPLOYMENT_TARGET)"
+    if [ -n "$minos" ] && awk -v a="$minos" -v b="$MACOSX_DEPLOYMENT_TARGET" \
+         'BEGIN { exit !(a + 0 > b + 0) }'; then
+        echo "WARNING: the binary requires macOS $minos although" >&2
+        echo "         MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET was requested." >&2
+        echo "         A linked library was built for a newer macOS. Rebuild the" >&2
+        echo "         Homebrew dependencies with the same target, for example:" >&2
+        echo "           MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET brew install --build-from-source ..." >&2
+    fi
 fi
 
 # 5. Smoke test with the bundled binary

@@ -10,6 +10,10 @@
 # They are created by ./source/deploy.sh <target> on the respective machines and
 # are ignored by git. The script creates release/mspa-<version>/ with one
 # archive per platform and a SHA256SUMS file.
+#
+# The current MSPA_Guide.pdf is downloaded from the JRC MSPA page and included
+# in every archive. Set MSPA_GUIDE=/path/to/MSPA_Guide.pdf to use a local copy
+# instead (for offline builds).
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -42,6 +46,29 @@ mkdir -p "$out_dir"
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 
+# Fetch the current MSPA guide, so that the archives always contain the latest
+# documentation from the JRC MSPA page.
+guide_source="${MSPA_GUIDE:-}"
+if [ -z "$guide_source" ]; then
+    guide_url="https://ies-ows.jrc.ec.europa.eu/gtb/GTB/MSPA_Guide.pdf"
+    echo "Fetching the current MSPA guide"
+    guide_source="$staging/MSPA_Guide.pdf"
+    if ! curl -fsSL --retry 3 -o "$guide_source" "$guide_url"; then
+        echo "ERROR: could not download $guide_url" >&2
+        echo "       Set MSPA_GUIDE=/path/to/MSPA_Guide.pdf to use a local copy." >&2
+        exit 1
+    fi
+fi
+
+if [ ! -s "$guide_source" ]; then
+    echo "ERROR: the MSPA guide is empty or missing: $guide_source" >&2
+    exit 1
+fi
+if [ "$(head -c 4 "$guide_source")" != "%PDF" ]; then
+    echo "ERROR: the MSPA guide is not a PDF file: $guide_source" >&2
+    exit 1
+fi
+
 entries=(
     "linux-x86_64:source/mspa_dist_linux"
     "linux-aarch64:source/mspa_dist_linux_ARM"
@@ -72,6 +99,7 @@ for entry in "${entries[@]}"; do
     mkdir -p "$top"
     cp -R "$dist"/. "$top"/
     cp LICENSE README.md CITATION.cff "$top"/
+    cp "$guide_source" "$top/MSPA_Guide.pdf"
     [ -d docs ] && cp -R docs "$top"/
 
     # Normalise permissions so the archive is usable by whoever extracts it

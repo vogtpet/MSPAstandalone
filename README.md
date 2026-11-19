@@ -48,9 +48,11 @@ The image below illustrates the MSPA segmentation procedure of a binary mask:
 The binaries are built with generic CPU tuning (no `-march=native` or other
 CPU-specific instruction sets), so a binary built for `x86_64` runs on any
 Intel or AMD x86_64 CPU, and a binary built for `aarch64` runs on any ARMv8-A
-compatible CPU. The minimum macOS version of the macOS binary is the
-deployment target of your GCC toolchain (macOS 11 or later for Apple Silicon);
-lower it with `-mmacosx-version-min` in `source/Makefile_macOS_ARM` if needed.
+compatible CPU. The macOS binary is built with a minimum of **macOS 11**
+(`MACOSX_DEPLOYMENT_TARGET`, default `11.0`); override it for
+`source/deploy.sh macOS_ARM` if you need a different target. The build prints
+the effective minimum version, which can be higher than requested when a
+Homebrew library was built for a newer macOS.
 
 ## Download
 
@@ -74,6 +76,9 @@ shasum -a 256 -c SHA256SUMS   # macOS
 ```
 
 On Windows, check a file with `certutil -hashfile <file> SHA256`.
+
+Every archive also contains the current `MSPA_Guide.pdf`, downloaded from the
+JRC MSPA page when the release is packaged.
 
 The default Linux binaries are built on Debian 13 and require **glibc 2.41 or
 newer**. The extra `...-glibc2.31.tar.gz` archive is built on Debian 11 and
@@ -124,10 +129,28 @@ mspa -i <input> [-o <output>] [-odir <dir>] [-eew <width>]
 | `-disk`       | minimum RAM mode: spool intermediate images to disk            | off         |
 | `-v`          | verbose parameter output                                       | off         |
 
-Output pixel values follow the MSPA colour code (1 = core, 3 = perforation,
-5 = edge, 9 = loop, 17 = bridge, 33 = branch, 65 = islet, 129 = background,
-220 = internal hole; transition classes add 34/36/38/... for the 8-connected
-foreground).
+Output pixel values follow the MSPA colour code (MSPA guide, page 6):
+
+| Class | Internal = 0 | Internal = 1 |
+|---|---|---|
+| Core | 17 | 17, 117 |
+| Islet | 9 | 9, 109 |
+| Perforation | 5 | 105 |
+| Edge | 3 | 3, 103 |
+| Loop | 65 | 65, 165 |
+| Loop in edge | 67 | 67, 167 |
+| Loop in perforation | 69 | 169 |
+| Bridge | 33 | 33, 133 |
+| Bridge in edge | 35 | 35, 135 |
+| Bridge in perforation | 37 | 137 |
+| Branch | 1 | 1, 101 |
+| Background | 0 | 0 |
+| Border-Opening | – | 220 |
+| Core-Opening | – | 100 |
+| No Data | 129 | 129 |
+
+With `-internal 1` the pixel values of internal features are offset by 100
+(for example 17 → 117). Value 255 is not used by MSPA.
 
 ## Example
 

@@ -8,12 +8,20 @@
 # CPU portability: no -march / -march=native is used, so the binary runs on
 # every Apple Silicon CPU.
 #
-# The macOS binary is an aarch64 binary for macOS 11 or later unless the
-# toolchain default is higher. To lower the minimum macOS version, add for
-# example -mmacosx-version-min=11.0 to CFLAGS and LDFLAGS below.
+# The macOS binary is an aarch64 binary for macOS 11 or later. The minimum
+# version is controlled by MACOSX_DEPLOYMENT_TARGET (default: 11.0) and is
+# applied to the compiler and linker below. deploy.sh prints the effective
+# minimum version of the finished binary.
 # ---------------------------------------------------------------------------
 
 BREW_PREFIX := $(shell brew --prefix 2>/dev/null)
+
+# Minimum macOS version of the resulting binary.
+MACOSX_MIN ?= $(MACOSX_DEPLOYMENT_TARGET)
+ifeq ($(strip $(MACOSX_MIN)),)
+MACOSX_MIN := 11.0
+endif
+export MACOSX_DEPLOYMENT_TARGET := $(MACOSX_MIN)
 
 OBJ_FSP = corridor_lightmemt.o frag.o mia_parse.o
 
@@ -27,6 +35,7 @@ ifeq ($(origin CC),default)
 endif
 
 CFLAGS = -std=c99 -O2 -Wall -fopenmp \
+         -mmacosx-version-min=$(MACOSX_MIN) \
          -DFSP -DOPENMP -DNO_BUF -I$(MIALINC) \
          -I$(BREW_PREFIX)/include
 
@@ -56,7 +65,8 @@ fsp: $(OBJ_FSP) libmiallib_mspa.a
 	  echo "Install them with:"; \
 	  echo "  brew install gcc liblerc libdeflate libtiff jpeg-turbo libpng webp jbigkit zstd xz"; \
 	  exit 1; fi
-	$(CC) -O2 -fopenmp -static-libgcc -static-libstdc++ -o fsp $(OBJ_FSP) \
+	$(CC) -O2 -fopenmp -static-libgcc -static-libstdc++ \
+		-mmacosx-version-min=$(MACOSX_MIN) -o fsp $(OBJ_FSP) \
 		-Wl,-force_load,libmiallib_mspa.a \
 		-L$(BREW_PREFIX)/lib \
 		$(STATIC_LIBS) \
