@@ -101,6 +101,21 @@ jobs:
         shell: msys2 {0}
         run: bash ./source/deploy.sh ${{ matrix.target }}
 
+      - name: Build static codecs for macOS 11 (macOS)
+        if: matrix.target == 'macOS_ARM'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSLO https://github.com/Esri/lerc/archive/refs/tags/v4.3.0.tar.gz
+          tar xzf v4.3.0.tar.gz
+          cmake -S lerc-4.3.0 -B lerc-build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DBUILD_SHARED_LIBS=OFF
+          cmake --build lerc-build -j 4
+          echo "MSPA_LERC_A=$(pwd)/lerc-build/libLerc.a" >> "$GITHUB_ENV"
+          echo "MSPA_DEFLATE_A=$(brew --prefix libdeflate)/lib/libdeflate.a" >> "$GITHUB_ENV"
+
       - name: Build and test (Linux and macOS)
         if: runner.os != 'Windows'
         run: bash ./source/deploy.sh ${{ matrix.target }}

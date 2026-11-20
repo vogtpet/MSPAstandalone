@@ -43,6 +43,19 @@ OUTPUT_BIN = mspa_macOS_ARM
 
 GOMP_LIB = $(BREW_PREFIX)/opt/gcc/lib/gcc/current/libgomp.a
 
+# Codec libraries. CI can point these at static builds (MSPA_DEFLATE_A,
+# MSPA_LERC_A), so that no Homebrew dylib with a newer deployment target ends
+# up in the bundle. The defaults use the Homebrew shared libraries.
+DEFLATE_LINK = -ldeflate
+ifneq ($(strip $(MSPA_DEFLATE_A)),)
+DEFLATE_LINK = $(MSPA_DEFLATE_A)
+endif
+
+LERC_LINK = -lLerc
+ifneq ($(strip $(MSPA_LERC_A)),)
+LERC_LINK = $(MSPA_LERC_A)
+endif
+
 # Static libraries: only the libraries needed by MSPA (libtiff and its
 # dependencies). They are given with their full path so that no version
 # specific Homebrew symlink is required.
@@ -70,7 +83,7 @@ fsp: $(OBJ_FSP) libmiallib_mspa.a
 		-Wl,-force_load,libmiallib_mspa.a \
 		-L$(BREW_PREFIX)/lib \
 		$(STATIC_LIBS) \
-		-ldeflate -llerc -lz -lstdc++ -lpthread -lm -ldl
+		$(DEFLATE_LINK) $(LERC_LINK) -lz -lstdc++ -lpthread -lm -ldl
 	strip fsp
 	cp fsp $(OUTPUT_BIN)
 
