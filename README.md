@@ -61,14 +61,14 @@ Prebuilt binaries are attached to the
 
 | Archive | Platform |
 |---|---|
-| [mspa-2.4-linux-x86_64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-linux-x86_64.tar.gz) | Linux x86_64 |
-| [mspa-2.4-linux-x86_64-glibc2.31.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-linux-x86_64-glibc2.31.tar.gz) | Linux x86_64, older glibc (Debian 11 build) |
-| [mspa-2.4-linux-aarch64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-linux-aarch64.tar.gz) | Linux aarch64 / ARM64 |
-| [mspa-2.4-macos-arm64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-macos-arm64.tar.gz) | macOS Apple Silicon |
-| [mspa-2.4-windows-x86_64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-windows-x86_64.zip) | Windows x86_64 |
-| [mspa-2.4-windows-arm64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/mspa-2.4-windows-arm64.zip) | Windows ARM64 |
+| [mspa-2.4.1-linux-x86_64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-linux-x86_64.tar.gz) | Linux x86_64 |
+| [mspa-2.4.1-linux-x86_64-glibc2.31.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-linux-x86_64-glibc2.31.tar.gz) | Linux x86_64, older glibc (Debian 11 build) |
+| [mspa-2.4.1-linux-aarch64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-linux-aarch64.tar.gz) | Linux aarch64 / ARM64 |
+| [mspa-2.4.1-macos-arm64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-macos-arm64.tar.gz) | macOS Apple Silicon |
+| [mspa-2.4.1-windows-x86_64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-windows-x86_64.zip) | Windows x86_64 |
+| [mspa-2.4.1-windows-arm64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-windows-arm64.zip) | Windows ARM64 |
 
-Every release also includes a [`SHA256SUMS`](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4/SHA256SUMS) file:
+Every release also includes a [`SHA256SUMS`](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/SHA256SUMS) file:
 
 ```sh
 sha256sum -c SHA256SUMS       # Linux
@@ -80,6 +80,10 @@ On Windows, check a file with `certutil -hashfile <file> SHA256`.
 Every archive also contains the current `MSPA_Guide.pdf`, downloaded from the
 JRC MSPA page when the release is packaged.
 
+The `v2.4.1` release is a packaging update: the engine is still **2.4**, the
+macOS binary was rebuilt with a **macOS 11** deployment target, and the guide
+was refreshed.
+
 The default Linux binaries are built on Debian 13 and require **glibc 2.41 or
 newer**. The extra `...-glibc2.31.tar.gz` archive is built on Debian 11 and
 requires only **glibc 2.31 or newer**; use it on older distributions (for
@@ -88,23 +92,22 @@ a GLIBC version error. It produces identical MSPA output. For other
 architectures, build from source on an older distribution; see
 [Building](#building).
 
-The macOS archive contains the executable **and** the two dynamic libraries
-(`libdeflate.0.dylib`, `libLerc.4.dylib`). Keep all three files in the same
-directory; do not copy only the executable.
+The macOS archive contains a single, self-contained executable: `libdeflate`
+and `Lerc` are linked statically, so there are no dynamic libraries to keep
+next to it.
 
 The macOS binary is ad-hoc signed and not notarised, so Gatekeeper warns about
 downloaded files. After extracting the archive, clear the quarantine from the
 whole folder and run it:
 
 ```sh
-cd mspa-2.4-macos-arm64
+cd mspa-2.4.1-macos-arm64
 xattr -cr .
 ./mspa_macOS_ARM -help
 ```
 
-Clearing only the executable is not enough — the two dylibs are quarantined
-too. Only a Developer ID signature plus Apple notarisation avoids the warning
-entirely.
+Clearing the executable is enough; there are no bundled libraries. Only a
+Developer ID signature plus Apple notarisation avoids the warning entirely.
 
 The Windows binaries are not code-signed, so SmartScreen may show a warning;
 choose “More info” → “Run anyway” after verifying the checksum.
@@ -312,10 +315,11 @@ select a specific compiler, set `MSPA_CC`:
 MSPA_CC=/opt/homebrew/bin/gcc-15 ./source/deploy.sh macOS_ARM
 ```
 
-`source/deploy.sh` bundles the two remaining dynamic libraries (`libdeflate` and
-`libLerc`) and rewrites their paths to `@executable_path`, so the whole
-`source/mspa_dist_macOS_ARM/` directory can be copied to another Mac without
-Homebrew.
+When the codecs are linked dynamically (the default for a local build),
+`source/deploy.sh` bundles `libdeflate` and `libLerc` and rewrites their paths
+to `@executable_path`. The release build sets `MSPA_DEFLATE_A` and
+`MSPA_LERC_A` to static libraries built with
+`CMAKE_OSX_DEPLOYMENT_TARGET=11.0`, so the binary is self-contained.
 
 ## What `source/deploy.sh` does
 
@@ -323,7 +327,8 @@ Homebrew.
 2. builds the static library `libmiallib_mspa.a` from `source/mial-master/core/c`;
 3. compiles the MSPA driver with the platform makefile;
 4. creates `source/mspa_dist_<target>/` and copies the executable;
-5. on macOS, bundles and re-signs the dynamic libraries;
+5. on macOS, bundles and re-signs dynamic libraries when the codecs are
+   linked dynamically;
 6. runs the test image `source/testing/input.tif` twice (default parameters and
    `-graphfg 4 -internal 0`) and compares both outputs pixel by pixel with
    the reference images;
