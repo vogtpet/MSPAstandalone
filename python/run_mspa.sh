@@ -5,6 +5,13 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# The bundled workqueue layer is always available and avoids the misleading
+# "TBB threading layer is disabled" warning when Numba cannot discover the
+# external TBB library.  Override with MSPA_NUMBA_LAYER=tbb or omp.
+if [ -z "${NUMBA_THREADING_LAYER:-}" ]; then
+    export NUMBA_THREADING_LAYER="${MSPA_NUMBA_LAYER:-workqueue}"
+fi
+
 # Optional explicit override.
 if [ -n "${MSPA_PYTHON:-}" ] && [ -x "${MSPA_PYTHON}" ]; then
     exec "${MSPA_PYTHON}" "$here/run_mspa.py" "$@"

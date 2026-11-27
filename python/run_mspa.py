@@ -16,6 +16,12 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+# Select a threading layer before Numba is imported.  The bundled workqueue
+# layer is always available and avoids TBB discovery warnings; override with
+# NUMBA_THREADING_LAYER or MSPA_NUMBA_LAYER.
+if "NUMBA_THREADING_LAYER" not in os.environ:
+    os.environ["NUMBA_THREADING_LAYER"] = os.environ.get("MSPA_NUMBA_LAYER", "workqueue")
+
 from mspa import segment_binary_patterns
 from mspa.palettes import mspa_palette
 import preflight

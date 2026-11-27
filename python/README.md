@@ -210,16 +210,18 @@ The engine caps `-j` at Numba's configured maximum automatically; a request
 larger than the limit is reduced rather than aborting. On a very large host
 this is normal (for example 192 CPUs but a Numba maximum of 178).
 
-If Numba prints a warning that its threading layer is disabled, the run is
-still correct but may be slower. Common fixes are:
+The launchers set `NUMBA_THREADING_LAYER=workqueue` by default.  This uses
+Numba's bundled threading layer, avoids the misleading "TBB threading layer is
+disabled" warning when Numba cannot discover an external TBB library, and is
+still fully parallel.  To try another layer explicitly:
 
 ```sh
-# use the built-in workqueue layer for this run
-NUMBA_THREADING_LAYER=workqueue ./run_mspa.sh -i input.tif -o output.tif
-
-# or provide TBB to the existing venv
-.venv/bin/pip install tbb
+MSPA_NUMBA_LAYER=tbb ./run_mspa.sh -i input.tif -o output.tif
+MSPA_NUMBA_LAYER=omp ./run_mspa.sh -i input.tif -o output.tif
 ```
+
+Installing `tbb` into the venv is optional; the default workqueue path does
+not need it.
 
 Python 3.10 is supported by Numba. Prefer a Python version with a Numba wheel
 (for example 3.12); extremely new interpreters such as 3.14 may not yet be
