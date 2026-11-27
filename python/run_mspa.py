@@ -17,6 +17,7 @@ import numpy as np
 from PIL import Image
 
 from mspa import segment_binary_patterns
+from mspa.palettes import mspa_palette
 import preflight
 
 
@@ -57,36 +58,6 @@ def output_path(args: argparse.Namespace) -> Path:
         return args.output
     args.output_dir.mkdir(parents=True, exist_ok=True)
     return args.output_dir / args.output
-
-
-def mspa_palette(transition: int) -> bytes:
-    """Use the C reference palette when available, otherwise a small default."""
-    reference = Path(__file__).resolve().parent.parent / "source" / "testing" / "reference.tif"
-    try:
-        with Image.open(reference) as ref:
-            if ref.mode == "P":
-                palette = ref.getpalette()
-                if palette:
-                    return bytes(palette[:768])
-    except Exception:
-        pass
-
-    palette = np.zeros((256, 3), dtype=np.uint8)
-    palette[0] = (220, 220, 220)     # background
-    palette[1] = (255, 140, 0)       # branch
-    palette[3] = (0, 0, 0)           # edge
-    palette[5] = (0, 0, 255)         # perforation
-    palette[9] = (160, 60, 0)        # islet
-    palette[17] = (0, 200, 0)        # core
-    palette[33] = (255, 0, 0)        # bridge
-    palette[65] = (255, 255, 0)      # loop
-    palette[100] = (136, 136, 136)   # internal core opening
-    palette[129] = (255, 255, 255)   # nodata
-    palette[220] = (195, 195, 195)   # internal background
-    if transition:
-        for code in (35, 37, 67, 69):
-            palette[code] = palette[code - 34] if code in (35, 69) else palette[code - 32]
-    return palette.tobytes()
 
 
 def main() -> int:

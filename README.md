@@ -204,6 +204,7 @@ python/                 alternative pure-Python MSPA implementation
   preflight.py          hardware/RAM feasibility, memmap and runtime estimate
   run_mspa.py           command-line wrapper with the preflight guard
   mspa/workspace.py     RAM or memory-mapped array allocator
+  mspa/palettes.py      official transition 0/1 MSPA colour tables
   test_parity.py        pixel comparison against the source/testing references
 docs/example.png        example figure used in the README
 docs/mspa_procedure.gif MSPA segmentation procedure animation (JRC)
