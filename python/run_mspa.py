@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("-transition", "--transition", type=int, choices=(0, 1), default=1,
                    help="transition palette flag (default: 1)")
     p.add_argument("-j", "--jobs", type=int, default=None,
-                   help="threads (default: all available cores)")
+                   help="threads (default: all available cores, capped by Numba)")
     p.add_argument("--memmap-dir", type=Path, default=None,
                    help="temporary directory for memory-mapped processing")
     p.add_argument("--memmap-min-mb", type=float, default=64.0,

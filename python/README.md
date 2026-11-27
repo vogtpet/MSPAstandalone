@@ -204,6 +204,27 @@ The output also carries the GTB-style metadata:
 
 For example, the default run carries the suffix `8_1_1_1`.
 
+### Numba threads / threading layer
+
+The engine caps `-j` at Numba's configured maximum automatically; a request
+larger than the limit is reduced rather than aborting. On a very large host
+this is normal (for example 192 CPUs but a Numba maximum of 178).
+
+If Numba prints a warning that its threading layer is disabled, the run is
+still correct but may be slower. Common fixes are:
+
+```sh
+# use the built-in workqueue layer for this run
+NUMBA_THREADING_LAYER=workqueue ./run_mspa.sh -i input.tif -o output.tif
+
+# or provide TBB to the existing venv
+.venv/bin/pip install tbb
+```
+
+Python 3.10 is supported by Numba. Prefer a Python version with a Numba wheel
+(for example 3.12); extremely new interpreters such as 3.14 may not yet be
+supported by Numba.
+
 ## Class codes
 
 The C code stores MSPA classes as bit planes, so several codes are sums:

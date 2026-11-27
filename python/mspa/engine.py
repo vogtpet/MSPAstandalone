@@ -1701,8 +1701,8 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     n_jobs : int or None
         Number of threads used by the parallel Numba EDT (and, without Numba,
         by the thread pool for the independent stages). None (default) uses
-        all available cores; 1 forces a serial run. The result is identical
-        regardless of ``n_jobs``.
+        all available cores, capped at Numba's configured maximum; 1 forces a
+        serial run. The result is identical regardless of ``n_jobs``.
 
     memmap_dir : path or None
         Optional temporary directory for memory-mapped working arrays.  This
@@ -1726,7 +1726,21 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     n_jobs = max(1, int(n_jobs))
     if _HAVE_NUMBA:
         import numba
-        numba.set_num_threads(n_jobs)
+        # Numba's maximum can be lower than the OS CPU count (affinity,
+        # cgroup limits or NUMBA_NUM_THREADS).  Never request more than it
+        # permits; a failed threading-layer setup falls back to one thread
+        # rather than aborting the whole run.
+        max_threads = int(getattr(numba.config, "NUMBA_NUM_THREADS", 0) or 0)
+        if max_threads > 0:
+            n_jobs = min(n_jobs, max_threads)
+        try:
+            numba.set_num_threads(n_jobs)
+        except (ValueError, RuntimeError):
+            n_jobs = 1
+            try:
+                numba.set_num_threads(1)
+            except Exception:
+                pass
 
     if graphfg == 8:
         graphbg, oitype = 4, 0
