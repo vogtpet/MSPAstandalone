@@ -48,6 +48,7 @@ MEMMAP_TIME_FACTOR = 1.5
 @dataclass
 class Hardware:
     cpus: int
+    available_cpus: int
     total_ram_bytes: int | None
     available_ram_bytes: int | None
 
@@ -157,14 +158,31 @@ def _read_windows_memory() -> tuple[int | None, int | None]:
         return None, None
 
 
+def _system_cpus() -> int:
+    return max(1, os.cpu_count() or 1)
+
+
+def _available_cpus() -> int:
+    try:
+        value = int(subprocess.check_output(
+            ["nproc"], text=True, stderr=subprocess.DEVNULL).strip())
+        if value > 0:
+            return value
+    except Exception:
+        pass
+    try:
+        return max(1, len(os.sched_getaffinity(0)))  # type: ignore[attr-defined]
+    except (AttributeError, OSError):
+        return _system_cpus()
+
+
 def detect_hardware(cpus: int | None = None,
                     total_ram_gb: float | None = None,
-                    available_ram_gb: float | None = None) -> Hardware:
-    if cpus is None:
-        try:
-            cpus = len(os.sched_getaffinity(0))  # type: ignore[attr-defined]
-        except (AttributeError, OSError):
-            cpus = os.cpu_count() or 1
+                    available_ram_gb: float | None = None,
+                    available_cpus: int | None = None) -> Hardware:
+    system = max(1, int(cpus)) if cpus is not None else _system_cpus()
+    usable = (max(1, int(available_cpus)) if available_cpus is not None
+              else (system if cpus is not None else _available_cpus()))
     if sys.platform.startswith("linux"):
         total, available = _read_linux_meminfo()
     elif sys.platform == "darwin":
@@ -181,8 +199,8 @@ def detect_hardware(cpus: int | None = None,
     if available is None and total is not None:
         # No MemAvailable equivalent: assume 80% is usable, never 100%.
         available = int(total * 0.8)
-    return Hardware(cpus=max(1, int(cpus)), total_ram_bytes=total,
-                    available_ram_bytes=available)
+    return Hardware(cpus=system, available_cpus=usable,
+                    total_ram_bytes=total, available_ram_bytes=available)
 
 
 def _bits_for_mode(mode: str, bands: int) -> int:
@@ -295,7 +313,8 @@ def build_estimate(info: ImageInfo, hardware: Hardware, edge_width: float,
         usable_ram_bytes=usable,
         sufficient=sufficient,
         shortfall_bytes=shortfall,
-        estimated_seconds=estimate_time_seconds(pixels, edge_width, hardware.cpus),
+        estimated_seconds=estimate_time_seconds(
+            pixels, edge_width, hardware.available_cpus),
         first_run_compile_seconds=FIRST_RUN_COMPILE_SECONDS,
         index_dtype="int64" if pixels > 2 ** 31 else "int32",
         disk=disk,
@@ -334,7 +353,8 @@ def print_report(info: ImageInfo, hardware: Hardware, estimate: Estimate,
     print(f"Uncompressed size:  {format_bytes(info.uncompressed_bytes)}")
     print(f"File size:          {format_bytes(info.file_size_bytes)}")
     print()
-    print(f"CPUs:               {hardware.cpus} logical")
+    print(f"CPUs:               {hardware.cpus} logical "
+          f"(available: {hardware.available_cpus})")
     print(f"RAM total:          {format_bytes(hardware.total_ram_bytes)}")
     print(f"RAM available:      {format_bytes(hardware.available_ram_bytes)}")
     print(f"Reserve:            {RESERVE_FRACTION * 100:.0f}% of available RAM")
@@ -411,6 +431,8 @@ def parse_args() -> argparse.Namespace:
                         help="MSPA edge width / -eew (default: 1.0)")
     parser.add_argument("--cpus", type=int,
                         help="override the detected logical CPU count")
+    parser.add_argument("--available-cpus", type=int,
+                        help="override the usable CPU count (nproc)")
     parser.add_argument("--total-ram-gb", type=float,
                         help="override total RAM in decimal GB")
     parser.add_argument("--available-ram-gb", type=float,
@@ -461,7 +483,8 @@ def main() -> int:
               f"this image has {info.bands} bands.", file=sys.stderr)
         return 2
 
-    hardware = detect_hardware(args.cpus, args.total_ram_gb, args.available_ram_gb)
+    hardware = detect_hardware(args.cpus, args.total_ram_gb,
+                               args.available_ram_gb, args.available_cpus)
     estimate = build_estimate(
         info, hardware, args.edge_width, args.output_dir, args.memmap_dir,
         int(args.memmap_free_gb * GB) if args.memmap_free_gb is not None else None,

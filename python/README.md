@@ -106,7 +106,12 @@ output.  `background` is `0` and `nodata` is `129`.
 `preflight.py` reads only the image header and the local hardware, then reports
 whether the in-memory engine is expected to fit and how long it should take.
 It exits with status 0 only when the RAM (and optionally the output disk) is
-sufficient:
+sufficient.  The CPU report distinguishes the system count from the CPUs
+actually available to the session (the value reported by `nproc`):
+
+```text
+CPUs:  178 logical (available: 3)
+```
 
 ```sh
 python preflight.py map.tif --edge-width 1.0 --output-dir /data/output
@@ -153,9 +158,13 @@ python preflight.py --width 650000 --height 460000 --cpus 170 \
 
 Hardware detection supports Linux (`/proc/meminfo`), macOS (`hw.memsize` and
 `vm_stat`, or `psutil`), and Windows (`GlobalMemoryStatusEx`).  `--cpus`,
-`--total-ram-gb`, `--available-ram-gb`, `--memmap-dir`,
-`--memmap-free-gb` and `--json` are available for scripting and for planning
-runs on another machine.
+`--total-ram-gb`, `--available-ram-gb`, `--cpus`, `--available-cpus`,
+`--memmap-dir`, `--memmap-free-gb` and `--json` are available for scripting
+and for planning runs on another machine.
+
+The engine's default thread count follows the available (`nproc`) count.  An
+explicit `-j N` overrides it; for example, `-j 100` uses 100 threads even if
+`nproc` currently reports 3.
 
 The RAM model is calibrated against the engine at 1000-8000 px, with a 25%
 baseline allowance, 1.10x safety factor and a 10% RAM reserve; maps above

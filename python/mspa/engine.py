@@ -47,6 +47,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+from .cpu import available_cpus
 from .workspace import active_workspace, alloc, release, workspace_context
 
 try:
@@ -1701,8 +1702,9 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     n_jobs : int or None
         Number of threads used by the parallel Numba EDT (and, without Numba,
         by the thread pool for the independent stages). None (default) uses
-        all available cores, capped at Numba's configured maximum; 1 forces a
-        serial run. The result is identical regardless of ``n_jobs``.
+        all cores available to this session (``nproc``), capped at Numba's
+        configured maximum; 1 forces a serial run. The result is identical
+        regardless of ``n_jobs``.
 
     memmap_dir : path or None
         Optional temporary directory for memory-mapped working arrays.  This
@@ -1722,7 +1724,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     if imin.dtype != np.uint8:
         imin = imin.astype(np.uint8)
     if n_jobs is None:
-        n_jobs = os.cpu_count() or 1
+        n_jobs = available_cpus()
     n_jobs = max(1, int(n_jobs))
     if _HAVE_NUMBA:
         import numba
