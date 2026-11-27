@@ -202,6 +202,7 @@ source/                 all files needed to build and test MSPA
 python/                 alternative pure-Python MSPA implementation
   mspa/                 engine (no compiled binary required)
   preflight.py          hardware/RAM feasibility, memmap and runtime estimate
+  run_mspa.py           command-line wrapper with the preflight guard
   mspa/workspace.py     RAM or memory-mapped array allocator
   test_parity.py        pixel comparison against the source/testing references
 docs/example.png        example figure used in the README
@@ -377,9 +378,12 @@ internal/transition on and off, and synthetic rasters) was also pixel-identical.
 ```sh
 cd python
 pip install -r requirements.txt
-python preflight.py map.tif --output-dir /data/output
-python test_parity.py
+python run_mspa.py -i map.tif -o output.tif
 ```
+
+The wrapper runs the preflight automatically and refuses to start if the map
+is not expected to fit. You can also run `preflight.py` separately and use
+`test_parity.py` to check the reference output.
 
 `preflight.py` checks the CPU count, available RAM, the input dimensions from
 the header, and optionally a memory-mapped temp directory; it exits non-zero

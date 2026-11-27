@@ -145,6 +145,28 @@ baseline allowance, 1.10x safety factor and a 10% RAM reserve; maps above
 deliberately conservative: a "NO" means the current in-memory design should
 not be attempted.
 
+## Run from the command line
+
+For a normal map that fits in RAM:
+
+```sh
+cd python
+python run_mspa.py -i input.tif -o output.tif
+```
+
+The options mirror the C program: `-eew`, `-graphfg`, `-internal`,
+`-transition`, `-odir`, and `-j` for the number of threads. The wrapper runs
+the same preflight check first and refuses to start if the map is not
+expected to fit. For a map that needs disk-backed processing:
+
+```sh
+python run_mspa.py -i input.tif -o output.tif --memmap-dir /scratch/mspa-temp
+```
+
+Input must follow the MSPA convention: `0` = nodata, `1` = background,
+`2` = foreground. The output is a palette TIFF with the same class codes as
+the C binary.
+
 ## Class codes
 
 The C code stores MSPA classes as bit planes, so several codes are sums:
