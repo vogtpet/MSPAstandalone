@@ -39,6 +39,10 @@ BYTES_PER_PIXEL_SIZE = 2.5
 SAFETY_FACTOR = 1.10
 RESERVE_FRACTION = 0.10
 FIRST_RUN_COMPILE_SECONDS = 20.0
+# Phase-1 memmap mode maps the bridge-test arrays: core/connector labels
+# (2 x 4 B), clipped copies (2 x 1 B), domain (1 B) and corridor (1 B).
+MEMMAP_BYTES_PER_PIXEL = 12.0
+MEMMAP_TIME_FACTOR = 1.5
 
 
 @dataclass
@@ -69,6 +73,15 @@ class DiskInfo:
 
 
 @dataclass
+class MemmapEstimate:
+    resident_ram_bytes: int
+    temp_bytes: int
+    disk_free_bytes: int | None
+    sufficient: bool | None
+    output_dir: str
+
+
+@dataclass
 class Estimate:
     pixels: int
     bytes_per_pixel: float
@@ -80,6 +93,7 @@ class Estimate:
     first_run_compile_seconds: float
     index_dtype: str
     disk: DiskInfo | None
+    memmap: MemmapEstimate | None
 
 
 def _read_linux_meminfo() -> tuple[int | None, int | None]:
@@ -236,7 +250,9 @@ def estimate_time_seconds(pixels: int, edge_width: float, cpus: int) -> float:
 
 
 def build_estimate(info: ImageInfo, hardware: Hardware, edge_width: float,
-                   output_dir: Path | None = None) -> Estimate:
+                   output_dir: Path | None = None,
+                   memmap_dir: Path | None = None,
+                   memmap_free_bytes: int | None = None) -> Estimate:
     pixels = info.width * info.height
     bpp = engine_bytes_per_pixel(edge_width)
     if pixels > 2 ** 31:
@@ -260,6 +276,18 @@ def build_estimate(info: ImageInfo, hardware: Hardware, edge_width: float,
         disk = DiskInfo(str(output_dir), free, required_disk,
                         free >= required_disk)
 
+    memmap = None
+    if memmap_dir is not None:
+        memmap_dir.mkdir(parents=True, exist_ok=True)
+        resident = int((BASELINE_BYTES
+                        + max(0.0, bpp - MEMMAP_BYTES_PER_PIXEL) * pixels)
+                       * SAFETY_FACTOR)
+        temp = int(MEMMAP_BYTES_PER_PIXEL * pixels * 1.05) + int(pixels * 1.05)
+        free = (memmap_free_bytes if memmap_free_bytes is not None
+                else shutil.disk_usage(memmap_dir).free)
+        ok = (usable is not None and resident <= usable and free >= temp)
+        memmap = MemmapEstimate(resident, temp, free, ok, str(memmap_dir))
+
     return Estimate(
         pixels=pixels,
         bytes_per_pixel=round(bpp, 2),
@@ -271,6 +299,7 @@ def build_estimate(info: ImageInfo, hardware: Hardware, edge_width: float,
         first_run_compile_seconds=FIRST_RUN_COMPILE_SECONDS,
         index_dtype="int64" if pixels > 2 ** 31 else "int32",
         disk=disk,
+        memmap=memmap,
     )
 
 
@@ -334,14 +363,35 @@ def print_report(info: ImageInfo, hardware: Hardware, estimate: Estimate,
         print(f"Output space need:  {format_bytes(d.required_bytes)}")
         print(f"Free disk:          {format_bytes(d.free_bytes)}")
         print(f"Disk verdict:       {'YES' if d.sufficient else 'NO'}")
+    if estimate.memmap is not None:
+        m = estimate.memmap
+        print()
+        print("Memory-mapped mode:")
+        print(f"Temp directory:     {m.output_dir}")
+        print(f"Resident RAM:       {format_bytes(m.resident_ram_bytes)}")
+        print(f"Temp + output disk: {format_bytes(m.temp_bytes)}")
+        print(f"Free disk:          {format_bytes(m.disk_free_bytes)}")
+        print(f"Memmap verdict:     {'YES' if m.sufficient else 'NO'}")
     print()
-    ok = estimate.sufficient is True
-    if estimate.disk is not None:
-        ok = ok and estimate.disk.sufficient
-    print("VERDICT:            " + ("PROCEED" if ok else "DO NOT PROCEED"))
-    if estimate.sufficient is False:
-        print("The current in-memory engine does not fit in the usable RAM.")
-        print("Use the C binary, or add memory-mapped/tiled processing.")
+    ram_ok = estimate.sufficient is True
+    memmap_ok = estimate.memmap is not None and estimate.memmap.sufficient is True
+    disk_ok = estimate.disk is None or estimate.disk.sufficient
+    ok = (ram_ok and disk_ok) or (memmap_ok and disk_ok)
+    mode = "RAM" if ram_ok else ("MEMMAP" if memmap_ok else "")
+    print("VERDICT:            " + ("PROCEED (" + mode + ")" if ok else "DO NOT PROCEED"))
+    if not ram_ok and memmap_ok:
+        print("The in-memory engine does not fit, but memory-mapped mode does.")
+        print(f"Use memmap_dir='{estimate.memmap.output_dir}' with "
+              f"memmap_min_bytes=67108864 (64 MiB).")
+        print(f"Expect roughly {MEMMAP_TIME_FACTOR:.1f}x the steady-state time.")
+    elif not ok:
+        if estimate.sufficient is False:
+            print("The in-memory engine does not fit in the usable RAM.")
+        if estimate.memmap is None:
+            print("Pass --memmap-dir to evaluate disk-backed processing.")
+        elif not estimate.memmap.sufficient:
+            print("Memory-mapped mode needs more free temp disk or RAM.")
+        print("Use the C binary, a larger temp disk, or tiled processing.")
 
 
 def parse_args() -> argparse.Namespace:
@@ -367,6 +417,10 @@ def parse_args() -> argparse.Namespace:
                         help="override available RAM in decimal GB")
     parser.add_argument("--output-dir", type=Path, default=None,
                         help="also check free space for the output TIFF")
+    parser.add_argument("--memmap-dir", type=Path, default=None,
+                        help="evaluate memory-mapped mode and check temp disk space")
+    parser.add_argument("--memmap-free-gb", type=float, default=None,
+                        help="override free temp-disk space in decimal GB")
     parser.add_argument("--json", action="store_true",
                         help="print a machine-readable JSON report")
     return parser.parse_args()
@@ -408,23 +462,30 @@ def main() -> int:
         return 2
 
     hardware = detect_hardware(args.cpus, args.total_ram_gb, args.available_ram_gb)
-    estimate = build_estimate(info, hardware, args.edge_width, args.output_dir)
+    estimate = build_estimate(
+        info, hardware, args.edge_width, args.output_dir, args.memmap_dir,
+        int(args.memmap_free_gb * GB) if args.memmap_free_gb is not None else None,
+    )
 
     if args.json:
         print(json.dumps({
             "input": asdict(info),
             "hardware": asdict(hardware),
             "estimate": asdict(estimate),
-            "verdict": "proceed" if estimate.sufficient else "do_not_proceed",
+            "verdict": (
+                "proceed_ram" if estimate.sufficient
+                else "proceed_memmap" if (estimate.memmap and estimate.memmap.sufficient)
+                else "do_not_proceed"),
         }, indent=2))
     else:
         print_report(info, hardware, estimate, args.edge_width)
 
     if estimate.sufficient is None:
         return 2
-    ok = estimate.sufficient
-    if estimate.disk is not None:
-        ok = ok and estimate.disk.sufficient
+    ram_ok = estimate.sufficient is True
+    memmap_ok = estimate.memmap is not None and estimate.memmap.sufficient is True
+    disk_ok = estimate.disk is None or estimate.disk.sufficient
+    ok = (ram_ok and disk_ok) or (memmap_ok and disk_ok)
     return 0 if ok else 1
 
 

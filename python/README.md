@@ -109,10 +109,22 @@ Estimated time:     ~1.3 days
 VERDICT:            DO NOT PROCEED
 ```
 
-The current in-memory engine therefore cannot process that map on an 8 TB
-machine, even though the C binary (roughly 20 bytes/pixel) fits.  Running the
-preflight first avoids loading hundreds of GB and failing days later; for this
-map use the C binary, or wait for memory-mapped/tiled processing.
+The in-memory engine therefore cannot process that map on an 8 TB machine,
+even though the C binary (roughly 20 bytes/pixel) fits.  Running the preflight
+first avoids loading hundreds of GB and failing days later.
+
+With a sufficiently large scratch disk, add `--memmap-dir`:
+
+```sh
+python preflight.py map.tif --cpus 170 --available-ram-gb 8000 \
+    --memmap-dir /scratch/mspa-temp --output-dir /scratch/output
+```
+
+For the CLC map this estimates about **5.68 TiB resident RAM** and
+**3.71 TiB temp + output disk**; it then reports `PROCEED (MEMMAP)` if the
+scratch disk has that much free space.  The mapped run is bit-identical to the
+C output; only storage changes.  The C binary remains the cheaper option for
+this specific map.
 
 The estimate can be checked without an input file:
 
@@ -123,8 +135,9 @@ python preflight.py --width 650000 --height 460000 --cpus 170 \
 
 Hardware detection supports Linux (`/proc/meminfo`), macOS (`hw.memsize` and
 `vm_stat`, or `psutil`), and Windows (`GlobalMemoryStatusEx`).  `--cpus`,
-`--total-ram-gb`, `--available-ram-gb` and `--json` are available for
-scripting and for planning runs on another machine.
+`--total-ram-gb`, `--available-ram-gb`, `--memmap-dir`,
+`--memmap-free-gb` and `--json` are available for scripting and for planning
+runs on another machine.
 
 The RAM model is calibrated against the engine at 1000-8000 px, with a 25%
 baseline allowance, 1.10x safety factor and a 10% RAM reserve; maps above
@@ -183,6 +196,36 @@ and Peter Vogt (European Commission, Joint Research Centre), distributed
 under GPL-3.0-or-later, and from the pyGuidos pure-Python work.  The algorithm
 map in `mspa/engine.py` names the miallib functions each part replaces.
 
+## Memory-mapped mode
+
+For rasters that do not fit in RAM, pass a temporary directory:
+
+```python
+out = segment_binary_patterns(
+    imin,
+    edge_width=1.0,
+    graphfg=8,
+    internal=1,
+    memmap_dir="/scratch/mspa-temp",
+    memmap_min_bytes=64 * 1024 * 1024,
+)
+```
+
+This is a **storage-only** change: the algorithm, traversal order, border
+handling and tie-breaking are unchanged, so the output remains pixel-identical
+to the C code. The current implementation maps the bridge-test arrays:
+core/connector labels, their clipped copies, the flood domain and the corridor
+result (about 12 bytes/pixel). Other arrays remain in RAM. Arrays smaller than
+`memmap_min_bytes` stay in RAM; use `memmap_min_bytes=0` in tests to force the
+mapped path.
+
+Memory mapping is **not recommended for ordinary rasters**: with enough free
+RAM, mapped pages stay cached and add page-fault/I/O overhead. It is selected
+only when the raster is too large for RAM. A run needs roughly
+`12 × pixels` bytes of temporary disk in addition to the output raster.
+
+For normal maps, the default in-RAM path remains faster.
+
 ## Performance
 
 The numbers below were measured on the same Linux x86_64 host (16 vCPU),
@@ -196,28 +239,28 @@ processes reuse the Numba cache.
 
 | Image | C time | C RSS | Python time | Python RSS |
 |---|---:|---:|---:|---:|
-| 1000 x 1000 | 1.4 s | 26 MB | 0.5 s | 198 MB |
-| 2000 x 2000 | 3.3 s | 102 MB | 1.4 s | 286 MB |
-| 4000 x 4000 | 11.9 s | 334 MB | 7.9 s | 710 MB |
-| 8000 x 8000 | 52.4 s | 1.26 GB | 38.4 s | 2.00 GB |
+| 1000 x 1000 | 1.4 s | 26 MB | 0.6 s | 201 MB |
+| 2000 x 2000 | 3.3 s | 102 MB | 1.6 s | 302 MB |
+| 4000 x 4000 | 11.9 s | 334 MB | 8.9 s | 663 MB |
+| 8000 x 8000 | 52.4 s | 1.26 GB | 42.3 s | 1.75 GB |
 
 ### Edge width 5.0
 
 | Image | C time | C RSS | Python time | Python RSS |
 |---|---:|---:|---:|---:|
-| 1000 x 1000 | 3.3 s | 26 MB | 0.7 s | 248 MB |
-| 2000 x 2000 | 5.1 s | 102 MB | 2.3 s | 311 MB |
-| 4000 x 4000 | 15.3 s | 335 MB | 7.8 s | 737 MB |
+| 1000 x 1000 | 3.3 s | 26 MB | 0.9 s | 248 MB |
+| 2000 x 2000 | 5.1 s | 102 MB | 2.7 s | 308 MB |
+| 4000 x 4000 | 15.3 s | 335 MB | 9.6 s | 721 MB |
 
 The Python version is now **faster than C in these benchmarks at every size**
-(0.5-0.75x the C time), including 4000² and 8000².  Peak RAM is about
-**1.6-2.2x C** for larger rasters (the interpreter baseline dominates at
+(0.6-0.8x the C time), including 4000² and 8000².  Peak RAM is about
+**1.4-2.2x C** for larger rasters (the interpreter baseline dominates at
 1000 x 1000).
 
 Runtime scales linearly with pixel count; memory is the limiting factor for
 very large rasters.  Extrapolating from 8000², a 10k² image needs roughly
-1.0 minute / 3.1 GB in Python versus 1.4 minutes / 2.0 GB in C; at 20k² the
-figures are roughly 4 minutes / 12.5 GB versus 5.5 minutes / 8 GB.
+1.1 minute / 2.7 GB in Python versus 1.4 minutes / 2.0 GB in C; at 20k² the
+figures are roughly 4.5 minutes / 11 GB versus 5.5 minutes / 8 GB.
 
 The remaining gap at large sizes is memory bandwidth and a few full-size
 temporaries, not algorithmic work.  C's OpenMP gains are themselves modest

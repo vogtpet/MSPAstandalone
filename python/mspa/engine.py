@@ -47,6 +47,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+from .workspace import active_workspace, alloc, release, workspace_context
+
 try:
     from numba import njit, prange, get_num_threads, get_thread_id
     _HAVE_NUMBA = True
@@ -1488,7 +1490,9 @@ def _wsfah(labels: np.ndarray, domain: np.ndarray, graph: int,
     if copy:
         labels = labels.astype(np.int32).copy()
     else:
-        labels = np.ascontiguousarray(labels, dtype=np.int32)
+        labels = np.asarray(labels, dtype=np.int32)
+        if not labels.flags.c_contiguous:
+            labels = np.ascontiguousarray(labels)
 
     # wsfah() frames the label image with a wall before seeding: border pixels
     # are neither markers nor floodable.  The MSB scheme lets the flood use the
@@ -1497,8 +1501,11 @@ def _wsfah(labels: np.ndarray, domain: np.ndarray, graph: int,
     labels[-1, :] = -1
     labels[:, 0] = -1
     labels[:, -1] = -1
-    labels_flat = np.ascontiguousarray(labels, dtype=np.int32).ravel()
-    domain_flat = np.ascontiguousarray(domain, dtype=np.uint8).ravel()
+    labels_flat = labels.ravel()
+    domain = np.asarray(domain)
+    if not domain.flags.c_contiguous:
+        domain = np.ascontiguousarray(domain)
+    domain_flat = domain.ravel()
 
     n = H * W
     qdtype = np.int32 if n <= 2 ** 31 else np.int64
@@ -1594,23 +1601,37 @@ def getcorridor(connector: np.ndarray, core: np.ndarray, opening: np.ndarray,
     opening_b = opening.astype(bool)
     st = _struct(graphfg)
 
-    core_clip = core_b.astype(np.uint8).copy()
+    core_clip = alloc(core_b.shape, np.uint8, "core_clip")
+    np.copyto(core_clip, core_b, casting="unsafe")
     core_clip[0, :] = 0
     core_clip[-1, :] = 0
     core_clip[:, 0] = 0
     core_clip[:, -1] = 0
-    core_lbl, n_core = _ndi.label(core_clip, structure=st)
-    domain = (opening_b | conn_b)
+    core_lbl = alloc(core_b.shape, np.int32, "core_lbl")
+    result = _ndi.label(core_clip, structure=st, output=core_lbl)
+    n_core = result if isinstance(result, int) else result[1]
+    release(core_clip)
+    del core_clip
+
+    domain = alloc(core_b.shape, np.bool_, "domain")
+    np.logical_or(opening_b, conn_b, out=domain)
 
     # wsfah: flood core labels across the domain (background is a wall)
     prop = _wsfah(core_lbl, domain, graphfg, copy=False)
+    release(domain)
+    del domain
 
-    conn_clip = conn_b.astype(np.uint8).copy()
+    conn_clip = alloc(core_b.shape, np.uint8, "conn_clip")
+    np.copyto(conn_clip, conn_b, casting="unsafe")
     conn_clip[0, :] = 0
     conn_clip[-1, :] = 0
     conn_clip[:, 0] = 0
     conn_clip[:, -1] = 0
-    conn_lbl, n_conn = _ndi.label(conn_clip, structure=st)
+    conn_lbl = alloc(core_b.shape, np.int32, "conn_lbl")
+    result = _ndi.label(conn_clip, structure=st, output=conn_lbl)
+    n_conn = result if isinstance(result, int) else result[1]
+    release(conn_clip)
+    del conn_clip
     if n_conn == 0:
         return np.zeros_like(core_b, dtype=np.uint8)
 
@@ -1637,8 +1658,18 @@ def getcorridor(connector: np.ndarray, core: np.ndarray, opening: np.ndarray,
     is_bridge = np.zeros(n_conn + 1, dtype=bool)
     is_bridge[has_ids] = (seg_max[has_ids] - seg_min[has_ids]) >= 1
     is_bridge[0] = False                       # label 0 is background
-    corridor = is_bridge[conn_lbl] & conn_b
-    return corridor.astype(np.uint8)
+    if active_workspace() is None:
+        # RAM path: avoid an extra full-size buffer.
+        corridor = is_bridge[conn_lbl] & conn_b
+        return corridor.astype(np.uint8)
+    corridor_mask = alloc(core_b.shape, np.bool_, "corridor_mask")
+    np.take(is_bridge, conn_lbl, out=corridor_mask)
+    np.logical_and(corridor_mask, conn_b, out=corridor_mask)
+    corridor = alloc(core_b.shape, np.uint8, "corridor")
+    np.copyto(corridor, corridor_mask, casting="unsafe")
+    release(corridor_mask)
+    del corridor_mask
+    return corridor
 
 
 # ===========================================================================
@@ -1653,7 +1684,9 @@ def _dilate4(mask: np.ndarray) -> np.ndarray:
 
 def segment_binary_patterns(imin: np.ndarray, edge_width: float,
                             graphfg: int = 8, transition: int = 1,
-                            internal: int = 1, n_jobs: int | None = None) -> np.ndarray:
+                            internal: int = 1, n_jobs: int | None = None,
+                            memmap_dir: str | None = None,
+                            memmap_min_bytes: int = 64 * 1024 * 1024) -> np.ndarray:
     """
     Pure-Python port of segmentBinaryPatterns (mspa.c).
 
@@ -1670,8 +1703,24 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
         by the thread pool for the independent stages). None (default) uses
         all available cores; 1 forces a serial run. The result is identical
         regardless of ``n_jobs``.
+
+    memmap_dir : path or None
+        Optional temporary directory for memory-mapped working arrays.  This
+        is a storage-only option: the algorithm and results are unchanged.
+        It is intended for rasters that exceed RAM; ordinary rasters should
+        leave it as None.
+    memmap_min_bytes : int
+        Arrays at least this large are mapped to files when memmap_dir is
+        set (default: 64 MiB).  Set to 0 to map every workspace allocation
+        (used by the parity tests).
     """
-    imin = np.asarray(imin).astype(np.uint8)
+    if memmap_dir is not None:
+        with workspace_context(memmap_dir, memmap_min_bytes):
+            return segment_binary_patterns(
+                imin, edge_width, graphfg, transition, internal, n_jobs)
+    imin = np.asarray(imin)
+    if imin.dtype != np.uint8:
+        imin = imin.astype(np.uint8)
     if n_jobs is None:
         n_jobs = os.cpu_count() or 1
     n_jobs = max(1, int(n_jobs))
