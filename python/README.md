@@ -45,6 +45,24 @@ reproduces these implementation details:
 
 ## Install
 
+The launcher performs the setup automatically on first use:
+
+```sh
+cd python
+./run_mspa.sh -i input.tif -o output.tif
+```
+
+If no usable `.venv` exists, it creates one with Python 3.10-3.13 and installs
+`requirements.txt`.  If an existing environment is missing packages, it
+installs them; if it is unusable, the script tells you to remove it and rerun.
+On Ubuntu you may need `sudo apt install python3-venv` (and the matching
+`python3.10-venv` package if Python 3.10 is the only supported interpreter).
+
+Python 3.14 is not supported by Numba yet; use 3.10-3.13.  TBB is optional:
+the launcher selects Numba's bundled `workqueue` layer by default.
+
+Manual setup remains possible:
+
 ```sh
 cd python
 python3 -m venv .venv

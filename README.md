@@ -379,9 +379,11 @@ internal/transition on and off, and synthetic rasters) was also pixel-identical.
 
 ```sh
 cd python
-pip install -r requirements.txt
 ./run_mspa.sh -i map.tif -o output.tif
 ```
+
+On first use the launcher creates `.venv` and installs `requirements.txt`
+automatically (Python 3.10-3.13; Numba does not support Python 3.14 yet).
 
 The wrapper runs the preflight automatically and refuses to start if the map
 is not expected to fit. You can also run `preflight.py` separately and use
