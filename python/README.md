@@ -165,8 +165,8 @@ python run_mspa.py -i input.tif -o output.tif --memmap-dir /scratch/mspa-temp
 
 Input must follow the MSPA convention: `0` = nodata, `1` = background,
 `2` = foreground. The output is a palette TIFF with the same class codes as
-the C binary and the official pyGuidos `mspa_colormap_trans1` /
-`mspa_colormap_trans0` lookup table selected by `-transition`.
+the C binary and the official GTB `transition1.txt` / `transition0.txt`
+colour tables selected by `-transition`.
 
 ## Class codes
 
