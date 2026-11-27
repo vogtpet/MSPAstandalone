@@ -201,6 +201,7 @@ source/                 all files needed to build and test MSPA
   testing/              smoke test image, reference outputs and comparison tool
 python/                 alternative pure-Python MSPA implementation
   mspa/                 engine (no compiled binary required)
+  preflight.py          hardware/RAM feasibility and runtime estimate
   test_parity.py        pixel comparison against the source/testing references
 docs/example.png        example figure used in the README
 docs/mspa_procedure.gif MSPA segmentation procedure animation (JRC)
@@ -375,12 +376,17 @@ internal/transition on and off, and synthetic rasters) was also pixel-identical.
 ```sh
 cd python
 pip install -r requirements.txt
+python preflight.py map.tif --output-dir /data/output
 python test_parity.py
 ```
 
+`preflight.py` checks the CPU count, available RAM and the input dimensions
+from the header before loading the raster, and exits non-zero if the in-memory
+engine is unlikely to fit. See [`python/preflight.py`](python/preflight.py).
+
 See [`python/README.md`](python/README.md) for usage, the class-code table and
-performance measurements (now comparable to the C runtime on small/medium
-rasters, about 1.2-1.3x slower at 4000²-8000², and about 1.6-2.2x C's peak RAM).
+performance measurements (faster than C in the 1000²-8000² benchmarks, with
+about 1.6-2.2x C's peak RAM).
 
 ## Continuous integration
 

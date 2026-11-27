@@ -347,24 +347,18 @@ def _nb_indep_simple(p, pa, stype, atype, pos, sh, nx, htab, sp2, sp4):
 
 
 @njit(cache=True)
-def _grow_i32(q, used):
-    """Grow a grow-only int32 queue, preserving the first ``used`` entries."""
-    nq = np.empty(q.size * 2, dtype=np.int32)
-    for i in range(used):
-        nq[i] = q[i]
-    return nq
+def _grow(q, used):
+    """Grow a grow-only queue, preserving its dtype and first ``used`` entries."""
+    return np.concatenate((q, q))
 
 
 @njit(cache=True)
-def _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end, htab, sp2, sp4):
+def _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end, htab, sp2, sp4,
+                  qcurrent, qnext, q2):
     """Core order-independent thinning on a flat framed buffer p (modified in
     place). Grow-only integer queues replace the Python-list FIFOs."""
     npix = p.shape[0]
     psimple = np.zeros(npix, dtype=np.uint8)
-    cap = 4096 if npix > 4096 else npix
-    qcurrent = np.empty(cap, dtype=np.int32)
-    qnext = np.empty(cap, dtype=np.int32)
-    q2 = np.empty(cap, dtype=np.int32)
     nc = 0
 
     # seed: all independent simple non-anchor points
@@ -374,7 +368,7 @@ def _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end, htab, sp2, sp4):
                 and _nb_indep_simple(p, pa, stype, atype, i, sh, nx, htab, sp2, sp4) != 0):
             psimple[i] = 1
             if nc == qcurrent.size:
-                qcurrent = _grow_i32(qcurrent, nc)
+                qcurrent = _grow(qcurrent, nc)
             qcurrent[nc] = i
             nc += 1
         else:
@@ -391,7 +385,7 @@ def _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end, htab, sp2, sp4):
             psimple[i] = 0
             p[i] = 0
             if n2 == q2.size:
-                q2 = _grow_i32(q2, n2)
+                q2 = _grow(q2, n2)
             q2[n2] = i
             n2 += 1
         # re-examine neighbours of deleted pixels
@@ -406,7 +400,7 @@ def _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end, htab, sp2, sp4):
                         and _nb_indep_simple(p, pa, stype, atype, k, sh, nx, htab, sp2, sp4) != 0):
                     psimple[k] = 1
                     if nn == qnext.size:
-                        qnext = _grow_i32(qnext, nn)
+                        qnext = _grow(qnext, nn)
                     qnext[nn] = k
                     nn += 1
         # swap current<-next (no copy needed)
@@ -608,10 +602,19 @@ def binOIthin_FIFO(img: np.ndarray, stype: int, anchor: np.ndarray | None):
     start = 2 * nx + 2
     end = npix - 2 * nx - 2
 
+    # Flat indices are int32 while they fit, int64 only for maps beyond 2^31
+    # pixels; Numba specialises the kernel for the queue dtype.
+    qdtype = np.int32 if npix <= 2 ** 31 else np.int64
+    cap = 4096 if npix > 4096 else npix
+    qcurrent = np.empty(cap, dtype=qdtype)
+    qnext = np.empty(cap, dtype=qdtype)
+    q2 = np.empty(cap, dtype=qdtype)
+
     # The hot inner algorithm (seeding + iterative independent-set deletion)
     # runs in the numba-compiled core; p is modified in place.
     _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end,
-                  _HTAB_A, _SIMPLE_PAIR2_A, _SIMPLE_PAIR4_A)
+                  _HTAB_A, _SIMPLE_PAIR2_A, _SIMPLE_PAIR4_A,
+                  qcurrent, qnext, q2)
 
     out = buf.reshape(nyf, nx)[F:F + ny, F:F + nx0]
     return (out > 0).astype(np.uint8)
@@ -1111,7 +1114,7 @@ def _q_add(q, qhead, qtail, qcount, value):
     """Append to a growable FIFO (logical order preserved)."""
     if qcount == q.size:
         old_size = q.size
-        nq = np.empty(old_size * 2, dtype=np.int64)
+        nq = np.concatenate((q, q))
         for j in range(qcount):
             nq[j] = q[(qhead + j) % old_size]
         q = nq
@@ -1143,7 +1146,7 @@ def _q_look(q, qlook, qtail):
 
 
 @njit(cache=True)
-def _nb_ced(pr, pm, nx, ny):
+def _nb_ced(pr, pm, nx, ny, q):
     """Numba implementation of miallib's ced().
 
     pr/pm are flat uint8 arrays of the one-pixel-framed reference/mask.
@@ -1159,8 +1162,6 @@ def _nb_ced(pr, pm, nx, ny):
     dxs = np.array([0, 1, 0, -1], dtype=np.int64)
     dys = np.array([1, 0, -1, 0], dtype=np.int64)
 
-    cap = npix // 100 + 1024
-    q = np.empty(cap, dtype=np.int64)
     qhead = 0
     qtail = 0
     qcount = 0
@@ -1275,7 +1276,11 @@ def ced(ref: np.ndarray, mask: np.ndarray) -> np.ndarray:
     pm = np.zeros((ny, nx), dtype=np.uint8)
     pr[F:F + ny0, F:F + nx0] = (ref > 0).astype(np.uint8)
     pm[F:F + ny0, F:F + nx0] = (mask > 0).astype(np.uint8)
-    out = _nb_ced(pr.ravel(), pm.ravel(), nx, ny)
+    npix = nx * ny
+    qdtype = np.int32 if npix <= 2 ** 31 else np.int64
+    cap = npix // 100 + 1024
+    q = np.empty(cap, dtype=qdtype)
+    out = _nb_ced(pr.ravel(), pm.ravel(), nx, ny, q)
     return out.reshape(ny, nx)[F:F + ny0, F:F + nx0].astype(np.float32)
 
 
@@ -1345,10 +1350,10 @@ from collections import deque as _deque
 
 @njit(cache=True)
 def _rq_add(q, head, tail, count, value):
-    """Append to a growable int32 ring queue, preserving FIFO order."""
+    """Append to a growable integer ring queue, preserving FIFO order."""
     if count == q.size:
         old = q.size
-        nq = np.empty(old * 2, dtype=np.int32)
+        nq = np.concatenate((q, q))
         for j in range(count):
             nq[j] = q[(head + j) % old]
         q = nq
@@ -1371,7 +1376,7 @@ def _rq_remove(q, head, tail, count):
 
 
 @njit(cache=True)
-def _nb_wsfah(out, domain_flat, H, W, graph):
+def _nb_wsfah(out, domain_flat, H, W, graph, q):
     """Numba core for miallib wsfah, operating in place on one label image.
 
     ``out`` holds core labels (0 = to flood).  Seeded pixels are temporarily
@@ -1382,7 +1387,7 @@ def _nb_wsfah(out, domain_flat, H, W, graph):
     """
     n = H * W
     cap = 4096 if n > 4096 else (n if n > 0 else 1)
-    q = np.empty(cap, dtype=np.int32)
+    q = np.empty(cap, dtype=np.int64)
     head = 0
     tail = 0
     count = 0
@@ -1495,7 +1500,11 @@ def _wsfah(labels: np.ndarray, domain: np.ndarray, graph: int,
     labels_flat = np.ascontiguousarray(labels, dtype=np.int32).ravel()
     domain_flat = np.ascontiguousarray(domain, dtype=np.uint8).ravel()
 
-    _nb_wsfah(labels_flat, domain_flat, H, W, graph)
+    n = H * W
+    qdtype = np.int32 if n <= 2 ** 31 else np.int64
+    cap = 4096 if n > 4096 else (n if n > 0 else 1)
+    q = np.empty(cap, dtype=qdtype)
+    _nb_wsfah(labels_flat, domain_flat, H, W, graph, q)
 
     out = labels_flat.reshape(H, W)
     out[out < 0] = 0
