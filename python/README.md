@@ -113,6 +113,10 @@ actually available to the session (the value reported by `nproc`):
 CPUs:  178 logical (available: 3)
 ```
 
+`nproc` is Linux-only: the “available” figure honours it on Linux and equals
+the OS logical CPU count on macOS/Windows.  Use `-j N` to override the default
+on any platform.
+
 ```sh
 python preflight.py map.tif --edge-width 1.0 --output-dir /data/output
 # status 0 -> safe to load and run the engine

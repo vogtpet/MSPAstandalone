@@ -163,17 +163,19 @@ def _system_cpus() -> int:
 
 
 def _available_cpus() -> int:
-    try:
-        value = int(subprocess.check_output(
-            ["nproc"], text=True, stderr=subprocess.DEVNULL).strip())
-        if value > 0:
-            return value
-    except Exception:
-        pass
-    try:
-        return max(1, len(os.sched_getaffinity(0)))  # type: ignore[attr-defined]
-    except (AttributeError, OSError):
-        return _system_cpus()
+    if sys.platform.startswith("linux"):
+        try:
+            value = int(subprocess.check_output(
+                ["nproc"], text=True, stderr=subprocess.DEVNULL).strip())
+            if value > 0:
+                return value
+        except Exception:
+            pass
+        try:
+            return max(1, len(os.sched_getaffinity(0)))  # type: ignore[attr-defined]
+        except (AttributeError, OSError):
+            pass
+    return _system_cpus()
 
 
 def detect_hardware(cpus: int | None = None,
