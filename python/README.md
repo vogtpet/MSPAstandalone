@@ -280,11 +280,9 @@ because the thinning, geodesic propagation and watershed stages are serial
   label image (one int32 image instead of two), and early release of the
   stage masks before the bridge test;
 * adaptive index queues: `int32` below 2³¹ pixels, `int64` only for larger
-  maps, so normal-size rasters keep the smaller memory footprint.
-
-The remaining gap is the unavoidable full-size label/mask images and EDT
-temporaries.  For images beyond RAM, a memory-mapped or tiled variant with
-halos would be needed (the C program's `-disk` mode is the equivalent).
+  maps, so normal-size rasters keep the smaller memory footprint;
+* a storage-only memory-mapped mode for rasters beyond RAM (see above), with
+  no change to the algorithm or results.
 
 Without Numba the engine still works but the thinning, geodesic and EDT
 stages fall back to plain Python/SciPy and are much slower for large rasters.
