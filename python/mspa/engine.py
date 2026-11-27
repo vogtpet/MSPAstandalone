@@ -347,14 +347,24 @@ def _nb_indep_simple(p, pa, stype, atype, pos, sh, nx, htab, sp2, sp4):
 
 
 @njit(cache=True)
+def _grow_i32(q, used):
+    """Grow a grow-only int32 queue, preserving the first ``used`` entries."""
+    nq = np.empty(q.size * 2, dtype=np.int32)
+    for i in range(used):
+        nq[i] = q[i]
+    return nq
+
+
+@njit(cache=True)
 def _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end, htab, sp2, sp4):
     """Core order-independent thinning on a flat framed buffer p (modified in
-    place). Preallocated integer queues replace the Python-list FIFOs."""
+    place). Grow-only integer queues replace the Python-list FIFOs."""
     npix = p.shape[0]
     psimple = np.zeros(npix, dtype=np.uint8)
-    qcurrent = np.empty(npix, dtype=np.int32)
-    qnext = np.empty(npix, dtype=np.int32)
-    q2 = np.empty(npix, dtype=np.int32)
+    cap = 4096 if npix > 4096 else npix
+    qcurrent = np.empty(cap, dtype=np.int32)
+    qnext = np.empty(cap, dtype=np.int32)
+    q2 = np.empty(cap, dtype=np.int32)
     nc = 0
 
     # seed: all independent simple non-anchor points
@@ -363,6 +373,8 @@ def _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end, htab, sp2, sp4):
                 and _nb_test_anchor(pa, atype, i)
                 and _nb_indep_simple(p, pa, stype, atype, i, sh, nx, htab, sp2, sp4) != 0):
             psimple[i] = 1
+            if nc == qcurrent.size:
+                qcurrent = _grow_i32(qcurrent, nc)
             qcurrent[nc] = i
             nc += 1
         else:
@@ -378,6 +390,8 @@ def _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end, htab, sp2, sp4):
             deleted = 1
             psimple[i] = 0
             p[i] = 0
+            if n2 == q2.size:
+                q2 = _grow_i32(q2, n2)
             q2[n2] = i
             n2 += 1
         # re-examine neighbours of deleted pixels
@@ -391,11 +405,12 @@ def _nb_binOIthin(p, pa, atype, stype, sh, nx, start, end, htab, sp2, sp4):
                         and psimple[k] == 0
                         and _nb_indep_simple(p, pa, stype, atype, k, sh, nx, htab, sp2, sp4) != 0):
                     psimple[k] = 1
+                    if nn == qnext.size:
+                        qnext = _grow_i32(qnext, nn)
                     qnext[nn] = k
                     nn += 1
-        # swap current<-next
-        for a in range(nn):
-            qcurrent[a] = qnext[a]
+        # swap current<-next (no copy needed)
+        qcurrent, qnext = qnext, qcurrent
         nc = nn
 
 
@@ -1329,37 +1344,68 @@ from collections import deque as _deque
 
 
 @njit(cache=True)
-def _nb_wsfah(out, labels_flat, H, W, graph):
-    """Numba core for _wsfah on a flat int64 label buffer ``out`` (walls=-1,
-    domain-to-fill=0, markers>0), modified in place.
+def _rq_add(q, head, tail, count, value):
+    """Append to a growable int32 ring queue, preserving FIFO order."""
+    if count == q.size:
+        old = q.size
+        nq = np.empty(old * 2, dtype=np.int32)
+        for j in range(count):
+            nq[j] = q[(head + j) % old]
+        q = nq
+        head = 0
+        tail = count
+    q[tail] = value
+    tail = (tail + 1) % q.size
+    count += 1
+    return q, head, tail, count
 
-    Faithful to miallib ``wsfah``: raster-order seeding of marker neighbours
-    (4-connected first then diagonals for graph==8), then a level-0 FIFO flood,
-    first-come-first-served. Uses a flat-index ring queue instead of a deque.
+
+@njit(cache=True)
+def _rq_remove(q, head, tail, count):
+    if count == 0:
+        return 0, head, tail, count
+    value = q[head]
+    head = (head + 1) % q.size
+    count -= 1
+    return value, head, tail, count
+
+
+@njit(cache=True)
+def _nb_wsfah(out, domain_flat, H, W, graph):
+    """Numba core for miallib wsfah, operating in place on one label image.
+
+    ``out`` holds core labels (0 = to flood).  Seeded pixels are temporarily
+    marked with ``LABEL_MSB`` exactly as in uc_u32_wsfah, so a single int32
+    image is enough; the MSB is cleared before the FIFO flood.  ``domain_flat``
+    is the flood domain (1) / wall (0).  The queue is a growable ring buffer
+    holding only the live frontier.
     """
     n = H * W
-    q = np.empty(n, dtype=np.int32)
+    cap = 4096 if n > 4096 else (n if n > 0 else 1)
+    q = np.empty(cap, dtype=np.int32)
     head = 0
     tail = 0
-    seeded = np.zeros(n, dtype=np.uint8)
+    count = 0
+    LABEL_MSB = 1 << 30
 
-    # neighbour (dy, dx) deltas in the same order as the offsets above
     dy4 = np.array([-1, 0, 1, 0], dtype=np.int64)   # N, W, S, E (set_shift)
     dx4 = np.array([0, -1, 0, 1], dtype=np.int64)
     dyd = np.array([-1, -1, 1, 1], dtype=np.int64)
     dxd = np.array([-1, 1, -1, 1], dtype=np.int64)
 
-    # --- seeding: 4-connected pass, then diagonal pass (graph==8) ----------
+    # seeding: 4-connected pass, then diagonal pass (graph==8)
     for pass_id in range(2):
         if pass_id == 0:
-            dyv = dy4; dxv = dx4
+            dyv = dy4
+            dxv = dx4
         else:
             if graph != 8:
                 continue
-            dyv = dyd; dxv = dxd
+            dyv = dyd
+            dxv = dxd
         for idx in range(n):
-            lab = labels_flat[idx]
-            if lab <= 0:
+            lab = out[idx]
+            if lab <= 0 or lab >= LABEL_MSB:
                 continue
             y = idx // W
             x = idx - y * W
@@ -1369,22 +1415,24 @@ def _nb_wsfah(out, labels_flat, H, W, graph):
                 if nyy < 0 or nyy >= H or nxx < 0 or nxx >= W:
                     continue
                 nk = nyy * W + nxx
-                if out[nk] == 0 and seeded[nk] == 0:
-                    out[nk] = lab
-                    seeded[nk] = 1
-                    q[tail] = nk
-                    tail += 1
+                if out[nk] == 0 and domain_flat[nk] != 0:
+                    out[nk] = lab | LABEL_MSB
+                    q, head, tail, count = _rq_add(q, head, tail, count, nk)
 
-    # --- level-0 BFS flood, first-come-first-served ------------------------
+    # clear the MSB used to protect seeded pixels during the two seed passes
+    for i in range(n):
+        if out[i] >= LABEL_MSB:
+            out[i] ^= LABEL_MSB
+
     if graph == 8:
         dya = np.array([-1, 0, 1, 0, -1, -1, 1, 1], dtype=np.int64)
         dxa = np.array([0, -1, 0, 1, -1, 1, -1, 1], dtype=np.int64)
     else:
-        dya = dy4; dxa = dx4
+        dya = dy4
+        dxa = dx4
 
-    while head < tail:
-        idx = q[head]
-        head += 1
+    while count > 0:
+        idx, head, tail, count = _rq_remove(q, head, tail, count)
         lab = out[idx]
         y = idx // W
         x = idx - y * W
@@ -1394,13 +1442,13 @@ def _nb_wsfah(out, labels_flat, H, W, graph):
             if nyy < 0 or nyy >= H or nxx < 0 or nxx >= W:
                 continue
             nk = nyy * W + nxx
-            if out[nk] == 0:
+            if out[nk] == 0 and domain_flat[nk] != 0:
                 out[nk] = lab
-                q[tail] = nk
-                tail += 1
+                q, head, tail, count = _rq_add(q, head, tail, count, nk)
 
 
-def _wsfah(labels: np.ndarray, domain: np.ndarray, graph: int) -> np.ndarray:
+def _wsfah(labels: np.ndarray, domain: np.ndarray, graph: int,
+           copy: bool = True) -> np.ndarray:
     """
     Flat-landscape watershed-from-markers by ordered FIFO flooding, a faithful
     port of miallib ``wsfah`` (wsfah.c) as invoked by getcorridor.
@@ -1432,25 +1480,24 @@ def _wsfah(labels: np.ndarray, domain: np.ndarray, graph: int) -> np.ndarray:
     Returns the flooded label image (same dtype semantics as ``labels``).
     """
     H, W = labels.shape
-    labels = labels.astype(np.int32).copy()
-    # wsfah() calls framebox(iml, 1, UINT32_MAX) before the flood: the outer
-    # 1-pixel border is not a marker and cannot be flooded.
-    labels[0, :] = 0
-    labels[-1, :] = 0
-    labels[:, 0] = 0
-    labels[:, -1] = 0
-    out = labels.copy()
-    out[~domain.astype(bool)] = -1              # walls: never floodable
-    out[0, :] = -1
-    out[-1, :] = -1
-    out[:, 0] = -1
-    out[:, -1] = -1
+    if copy:
+        labels = labels.astype(np.int32).copy()
+    else:
+        labels = np.ascontiguousarray(labels, dtype=np.int32)
+
+    # wsfah() frames the label image with a wall before seeding: border pixels
+    # are neither markers nor floodable.  The MSB scheme lets the flood use the
+    # same image, so no second label array is allocated.
+    labels[0, :] = -1
+    labels[-1, :] = -1
+    labels[:, 0] = -1
+    labels[:, -1] = -1
     labels_flat = np.ascontiguousarray(labels, dtype=np.int32).ravel()
-    out_flat = np.ascontiguousarray(out, dtype=np.int32).ravel()
+    domain_flat = np.ascontiguousarray(domain, dtype=np.uint8).ravel()
 
-    _nb_wsfah(out_flat, labels_flat, H, W, graph)
+    _nb_wsfah(labels_flat, domain_flat, H, W, graph)
 
-    out = out_flat.reshape(H, W)
+    out = labels_flat.reshape(H, W)
     out[out < 0] = 0
     out[0, :] = 0
     out[-1, :] = 0
@@ -1547,7 +1594,7 @@ def getcorridor(connector: np.ndarray, core: np.ndarray, opening: np.ndarray,
     domain = (opening_b | conn_b)
 
     # wsfah: flood core labels across the domain (background is a wall)
-    prop = _wsfah(core_lbl, domain, graphfg)
+    prop = _wsfah(core_lbl, domain, graphfg, copy=False)
 
     conn_clip = conn_b.astype(np.uint8).copy()
     conn_clip[0, :] = 0
@@ -1693,7 +1740,13 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
         ah = subframebox(allHoles.astype(np.uint8), box)
         allHoles = addframebox(ah, F, 0).astype(bool)
 
+    # release the stage closures and the box-framed input: they hold full-size
+    # references that are no longer needed from here on.
+    del _task_patch, _task_edges, _task_holes
+    del im
+
     out = i0.astype(np.uint8)                     # FG base = bit0 = 1
+    del i0
 
     opening = (getexternalboundary(core.astype(np.uint8), size, edu).astype(bool) | core)
 
@@ -1705,6 +1758,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     out = out | (perf.astype(np.uint8) << 2)      # perforation = 4
     residues = residues & ~edges
     out = out | (edges.astype(np.uint8) << 1)     # edge = 2
+    del i0b, patch, perf, edges
 
     # binOIthin_FIFO() frames its anchor image in place (generic_framebox),
     # zeroing the outer two rows/columns of `core`; the C driver then uses
@@ -1720,9 +1774,11 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
                                   edu).astype(bool)
     corridor = getcorridor(connector.astype(np.uint8), core_work.astype(np.uint8),
                            opening.astype(np.uint8), graphfg).astype(bool)
+    del opening
 
     out = out | (core_work.astype(np.uint8) << 4)  # core = 16
     shortcut = connector & ~corridor              # shortcut = connector - corridor
+    del connector
 
     if size == 1:
         corridor = corridor | (_dilate4(corridor) & residues)

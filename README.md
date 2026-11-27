@@ -380,7 +380,7 @@ python test_parity.py
 
 See [`python/README.md`](python/README.md) for usage, the class-code table and
 performance measurements (now comparable to the C runtime on small/medium
-rasters, about 1.1-1.3x slower at 4000²-8000², and about 2-2.5x C's peak RAM).
+rasters, about 1.2-1.3x slower at 4000²-8000², and about 1.6-2.2x C's peak RAM).
 
 ## Continuous integration
 

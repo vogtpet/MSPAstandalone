@@ -147,28 +147,28 @@ processes reuse the Numba cache.
 
 | Image | C time | C RSS | Python time | Python RSS |
 |---|---:|---:|---:|---:|
-| 1000 x 1000 | 1.4 s | 26 MB | 0.9 s | 208 MB |
-| 2000 x 2000 | 3.3 s | 102 MB | 2.4 s | 329 MB |
-| 4000 x 4000 | 11.9 s | 334 MB | 13.5 s | 796 MB |
-| 8000 x 8000 | 52.4 s | 1.26 GB | 69.3 s | 2.63 GB |
+| 1000 x 1000 | 1.4 s | 26 MB | 1.0 s | 197 MB |
+| 2000 x 2000 | 3.3 s | 102 MB | 2.7 s | 286 MB |
+| 4000 x 4000 | 11.9 s | 334 MB | 14.8 s | 639 MB |
+| 8000 x 8000 | 52.4 s | 1.26 GB | 69.6 s | 2.00 GB |
 
 ### Edge width 5.0
 
 | Image | C time | C RSS | Python time | Python RSS |
 |---|---:|---:|---:|---:|
-| 1000 x 1000 | 3.3 s | 26 MB | 1.2 s | 252 MB |
-| 2000 x 2000 | 5.1 s | 102 MB | 3.8 s | 335 MB |
-| 4000 x 4000 | 15.3 s | 335 MB | 14.6 s | 831 MB |
+| 1000 x 1000 | 3.3 s | 26 MB | 1.4 s | 246 MB |
+| 2000 x 2000 | 5.1 s | 102 MB | 4.4 s | 311 MB |
+| 4000 x 4000 | 15.3 s | 335 MB | 16.1 s | 737 MB |
 
 The Python version is now **faster than C on 1000² and 2000² rasters**, and
-about **1.1-1.3x slower at 4000² and 8000²** for edge width 1.  Peak RAM is
-about **1.6-2.5x C** for larger rasters (the interpreter baseline dominates
-at 1000 x 1000).
+about **1.2-1.3x slower at 4000² and 8000²** for edge width 1 (roughly equal
+at 4000² for edge width 5).  Peak RAM is about **1.6-2.2x C** for larger
+rasters (the interpreter baseline dominates at 1000 x 1000).
 
 Runtime scales linearly with pixel count; memory is the limiting factor for
 very large rasters.  Extrapolating from 8000², a 10k² image needs roughly
-1.8 minutes / 4.1 GB in Python versus 1.4 minutes / 2.0 GB in C; at 20k² the
-figures are roughly 7 minutes / 16 GB versus 5.5 minutes / 8 GB.
+1.8 minutes / 3.1 GB in Python versus 1.4 minutes / 2.0 GB in C; at 20k² the
+figures are roughly 7 minutes / 12.5 GB versus 5.5 minutes / 8 GB.
 
 The remaining gap at large sizes is memory bandwidth and a few full-size
 temporaries, not algorithmic work.  C's OpenMP gains are themselves modest
@@ -182,11 +182,15 @@ because the thinning, geodesic propagation and watershed stages are serial
 * Numba flood fill for hole filling, replacing SciPy's `binary_fill_holes`
   dilation/erosion passes;
 * Numba `ced` with C-like `uint8`/`int16`/`float32` buffers;
-* `uint8` output bit planes and `int32` thinning/watershed labels and queues.
+* `uint8` output bit planes and `int32` thinning/watershed labels and queues;
+* grow-only thinning queues (instead of three full-size `npix` buffers);
+* a growable ring queue for the watershed, an in-place MSB-based watershed
+  label image (one int32 image instead of two), and early release of the
+  stage masks before the bridge test.
 
-Further memory reductions would need dynamic (grow-only) queues for the
-thinning/watershed stages, and for images beyond RAM a memory-mapped or tiled
-variant with halos (the C program's `-disk` mode is the equivalent).
+The remaining gap is the unavoidable full-size label/mask images and EDT
+temporaries.  For images beyond RAM, a memory-mapped or tiled variant with
+halos would be needed (the C program's `-disk` mode is the equivalent).
 
 Without Numba the engine still works but the thinning, geodesic and EDT
 stages fall back to plain Python/SciPy and are much slower for large rasters.
