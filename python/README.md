@@ -58,8 +58,23 @@ installs them; if it is unusable, the script tells you to remove it and rerun.
 On Ubuntu you may need `sudo apt install python3-venv` (and the matching
 `python3.10-venv` package if Python 3.10 is the only supported interpreter).
 
-Python 3.14 is not supported by Numba yet; use 3.10-3.13.  TBB is optional:
-the launcher selects Numba's bundled `workqueue` layer by default.
+Python 3.14 is not supported by Numba yet; use 3.10-3.13.  On native Windows
+ARM64 use Python 3.12 or 3.13: Numba 0.68+ is selected automatically there
+because those are the first releases with ARM64 wheels.  The batch launcher looks for `py -3.x`, `python3.x`, and the
+standard install paths.  Native Windows-on-ARM installs live in a directory
+such as `%LOCALAPPDATA%\Programs\Python\Python313-arm64`; that path is checked
+before the x64/emulated ones.  If Python still is not found, run `py -0p` to
+list registered interpreters, enable "Add Python to PATH" in the installer,
+or pass the full path explicitly:
+
+```bat
+set MSPA_PYTHON=%LOCALAPPDATA%\Programs\Python\Python313-arm64\python.exe
+run_mspa.bat -i input.tif -o output.tif
+```
+
+If typing `python` opens the Microsoft Store, disable the App Execution Alias
+under Settings > Apps > Advanced app settings.  TBB is optional: the launcher
+selects Numba's bundled `workqueue` layer by default.
 
 Manual setup remains possible:
 

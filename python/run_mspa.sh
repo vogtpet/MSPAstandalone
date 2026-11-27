@@ -77,7 +77,7 @@ done
 
 # Fresh setup: pick a Python version supported by Numba.
 python_bin=""
-for candidate in python3.12 python3.11 python3.10 python3; do
+for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
     if command -v "$candidate" >/dev/null 2>&1 && supported_python "$candidate"; then
         python_bin="$(command -v "$candidate")"
         break

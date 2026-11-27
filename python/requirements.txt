@@ -5,10 +5,10 @@ scipy>=1.10
 # Optional but strongly recommended: the anchored thinning and the watershed
 # flood are JIT-compiled.  Without numba they fall back to plain Python and
 # become very slow on real-size rasters.
-# Pin below 0.62: newer releases may not provide wheels for all supported
-# Python/platform combinations.  0.61.x supports Python 3.10-3.13 and has
-# prebuilt wheels for the common Linux/macOS/Windows targets.
-numba>=0.59,<0.62
+# Numba 0.61.x covers Linux/macOS/Windows x86_64 and macOS ARM.  Windows
+# ARM64 wheels first appear in 0.68.x, so use that branch there.
+numba>=0.59,<0.62; sys_platform != "win32" or platform_machine != "ARM64"
+numba>=0.68,<0.69; sys_platform == "win32" and platform_machine == "ARM64"
 
 # Only needed by test_parity.py (TIFF input/output).
 Pillow>=9

@@ -2,6 +2,10 @@
 # for the MSYS2/Windows CI jobs: a CRLF checkout breaks bash and make.
 * text=auto eol=lf
 
+# Windows batch files are parsed more reliably with CRLF line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
 *.docx binary
 *.tif binary
 *.tiff binary
