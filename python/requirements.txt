@@ -1,0 +1,11 @@
+# Runtime dependencies of the pure-Python MSPA engine.
+numpy>=1.24
+scipy>=1.10
+
+# Optional but strongly recommended: the anchored thinning and the watershed
+# flood are JIT-compiled.  Without numba they fall back to plain Python and
+# become very slow on real-size rasters.
+numba>=0.59
+
+# Only needed by test_parity.py (TIFF input/output).
+Pillow>=9

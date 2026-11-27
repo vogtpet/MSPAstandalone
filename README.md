@@ -199,6 +199,9 @@ source/                 all files needed to build and test MSPA
                         (the driver includes them directly; see
                         "Upstream modifications")
   testing/              smoke test image, reference outputs and comparison tool
+python/                 alternative pure-Python MSPA implementation
+  mspa/                 engine (no compiled binary required)
+  test_parity.py        pixel comparison against the source/testing references
 docs/example.png        example figure used in the README
 docs/mspa_procedure.gif MSPA segmentation procedure animation (JRC)
 .github/workflows/      CI build matrix (five targets)
@@ -358,6 +361,26 @@ The TIFF output contains a `Software` tag and a timestamp, so two runs are not
 byte-identical; only the pixel values are compared. `source/testing/compare_outputs.py`
 is an alternative comparison script (requires Pillow), and
 `source/testing/README.md` lists the expected class counts for the test image.
+
+## Python implementation (alternative)
+
+[`python/`](python/) contains a pure-Python port of MSPA. It is an alternative
+for environments where a compiled binary cannot be shipped (for example a QGIS
+plugin), not a replacement for the C build. The Python engine produces
+pixel-identical results to the C reference images in `source/testing/` for the
+default and `-graphfg 4 -internal 0` runs at edge widths 1.0 and 5.0. A wider
+comparison against the compiled C binary (edge widths 1–10, both connectivities,
+internal/transition on and off, and synthetic rasters) was also pixel-identical.
+
+```sh
+cd python
+pip install -r requirements.txt
+python test_parity.py
+```
+
+See [`python/README.md`](python/README.md) for usage, the class-code table and
+performance measurements (now comparable to the C runtime on small/medium
+rasters, about 1.1-1.3x slower at 4000²-8000², and about 2-2.5x C's peak RAM).
 
 ## Continuous integration
 

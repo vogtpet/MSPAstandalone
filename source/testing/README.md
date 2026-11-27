@@ -19,6 +19,11 @@ the pixel values instead.
 `source/deploy.sh` does this automatically: it compiles `tiffcmp.c` with libtiff and
 compares the two test outputs with `reference.tif` and
 `reference_nondefault.tif`. The build fails on the first differing pixel.
+
+`reference_eew5.tif` and `reference_eew5_nondefault.tif` are additional C
+outputs for edge width 5.0 (8- and 4-connectivity). They are used by the
+pure-Python parity test in `python/` and are not part of the `deploy.sh`
+smoke test.
 Set `MSPA_SKIP_VERIFY=1` to skip the comparison.
 
 The same check can be run manually:
