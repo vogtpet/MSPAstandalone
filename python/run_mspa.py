@@ -90,12 +90,21 @@ def main() -> int:
             print(f"WARNING: preflight failed ({exc}); continuing because of --force.",
                   file=sys.stderr)
 
+    geo_tags = {}
     with Image.open(args.input) as im:
         bands = len(im.getbands())
         if bands != 1:
             print(f"ERROR: expected a single-band image, got {bands} bands.",
                   file=sys.stderr)
             return 2
+        # Preserve GeoTIFF tags and resolution; GTB overwrites the
+        # description/software tags below.
+        for tag in (33550, 33922, 34264, 34735, 34736, 34737,
+                    42112, 42113):
+            if tag in im.tag_v2:
+                geo_tags[tag] = im.tag_v2[tag]
+        dpi = im.info.get("dpi", (100, 100))
+        resolution_unit = im.tag_v2.get(296, 2)
         imin = np.asarray(im)
 
     if imin.ndim != 2:
@@ -120,8 +129,27 @@ def main() -> int:
 
     image = Image.fromarray(np.ascontiguousarray(out, dtype=np.uint8), mode="P")
     image.putpalette(mspa_palette(args.transition))
-    image.save(out_path, compression="tiff_lzw")
-    print(f"Wrote {out_path}")
+
+    # GTB-style metadata: the parameter suffix records
+    # graphfg_edgewidth_internal_transition, e.g. the default 8_1_1_1.
+    params = (f"{args.graphfg}_{args.edge_width:g}_"
+              f"{args.internal}_{args.transition}")
+    description = ("GTB_MSPA, "
+                   "https://forest.jrc.ec.europa.eu/activities/lpa/gtb/ "
+                   f"{params}")
+    software = ("GTB, "
+                "https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/")
+    save_kwargs = dict(
+        compression="tiff_lzw",
+        description=description,
+        software=software,
+        dpi=dpi,
+        resolution_unit=resolution_unit,
+    )
+    if geo_tags:
+        save_kwargs["tiffinfo"] = geo_tags
+    image.save(out_path, **save_kwargs)
+    print(f"Wrote {out_path} ({params})")
     return 0
 
 

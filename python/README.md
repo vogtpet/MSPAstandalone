@@ -196,6 +196,14 @@ Input must follow the MSPA convention: `0` = nodata, `1` = background,
 the C binary and the official GTB `transition1.txt` / `transition0.txt`
 colour tables selected by `-transition`.
 
+If the input is a GeoTIFF, its georeferencing tags are copied to the output.
+The output also carries the GTB-style metadata:
+
+* `ImageDescription`: `GTB_MSPA, https://forest.jrc.ec.europa.eu/activities/lpa/gtb/ <g>_<eew>_<internal>_<transition>`
+* `Software`: `GTB, https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/`
+
+For example, the default run carries the suffix `8_1_1_1`.
+
 ## Class codes
 
 The C code stores MSPA classes as bit planes, so several codes are sums:
