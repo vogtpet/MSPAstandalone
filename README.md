@@ -203,6 +203,7 @@ python/                 alternative pure-Python MSPA implementation
   mspa/                 engine (no compiled binary required)
   preflight.py          hardware/RAM feasibility, memmap and runtime estimate
   run_mspa.py           command-line wrapper with the preflight guard
+  run_mspa.sh/.bat      launchers that use the project venv automatically
   mspa/workspace.py     RAM or memory-mapped array allocator
   mspa/palettes.py      official transition 0/1 MSPA colour tables
   test_parity.py        pixel comparison against the source/testing references
@@ -379,7 +380,7 @@ internal/transition on and off, and synthetic rasters) was also pixel-identical.
 ```sh
 cd python
 pip install -r requirements.txt
-python run_mspa.py -i map.tif -o output.tif
+./run_mspa.sh -i map.tif -o output.tif
 ```
 
 The wrapper runs the preflight automatically and refuses to start if the map

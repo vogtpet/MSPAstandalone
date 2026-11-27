@@ -147,12 +147,37 @@ not be attempted.
 
 ## Run from the command line
 
-For a normal map that fits in RAM:
+From a normal terminal (no venv activation needed), use the launcher:
 
 ```sh
 cd python
+./run_mspa.sh -i input.tif -o output.tif
+```
+
+On Windows:
+
+```bat
+cd python
+run_mspa.bat -i input.tif -o output.tif
+```
+
+The launcher finds `.venv` automatically and runs `run_mspa.py` with it.
+Alternatively, call the venv's Python explicitly:
+
+```sh
+.venv/bin/python run_mspa.py -i input.tif -o output.tif
+```
+
+or activate the environment first:
+
+```sh
+. .venv/bin/activate
 python run_mspa.py -i input.tif -o output.tif
 ```
+
+A plain system `python` does not have NumPy/SciPy/Numba and will fail with
+`ModuleNotFoundError: No module named 'numpy'`; that is why the launcher or
+the venv Python should be used.
 
 The options mirror the C program: `-eew`, `-graphfg`, `-internal`,
 `-transition`, `-odir`, and `-j` for the number of threads. The wrapper runs
@@ -160,8 +185,11 @@ the same preflight check first and refuses to start if the map is not
 expected to fit. For a map that needs disk-backed processing:
 
 ```sh
-python run_mspa.py -i input.tif -o output.tif --memmap-dir /scratch/mspa-temp
+./run_mspa.sh -i input.tif -o output.tif --memmap-dir /scratch/mspa-temp
 ```
+
+`MSPA_PYTHON=/path/to/python` can override the interpreter used by the
+launcher.
 
 Input must follow the MSPA convention: `0` = nodata, `1` = background,
 `2` = foreground. The output is a palette TIFF with the same class codes as
