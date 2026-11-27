@@ -223,6 +223,9 @@ def inspect_image(path: Path) -> ImageInfo:
     except ImportError as exc:  # pragma: no cover - Pillow is in requirements
         raise RuntimeError("Pillow is required to inspect the input image") from exc
 
+    # Large, trusted rasters legitimately exceed Pillow's default
+    # decompression-bomb threshold (about 179 megapixels).
+    Image.MAX_IMAGE_PIXELS = None
     with Image.open(path) as im:
         width, height = im.size
         mode = im.mode

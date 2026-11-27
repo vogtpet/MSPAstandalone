@@ -97,6 +97,9 @@ def main() -> int:
                   file=sys.stderr)
 
     geo_tags = {}
+    # Large, trusted rasters legitimately exceed Pillow's default
+    # decompression-bomb threshold (about 179 megapixels).
+    Image.MAX_IMAGE_PIXELS = None
     with Image.open(args.input) as im:
         bands = len(im.getbands())
         if bands != 1:

@@ -153,6 +153,11 @@ scratch disk has that much free space.  The mapped run is bit-identical to the
 C output; only storage changes.  The C binary remains the cheaper option for
 this specific map.
 
+Large trusted maps are allowed regardless of Pillow's default
+decompression-bomb threshold (the scripts set `Image.MAX_IMAGE_PIXELS = None`).
+The preflight then uses the real dimensions to decide whether RAM or memmap
+mode is required.
+
 The estimate can be checked without an input file:
 
 ```sh
