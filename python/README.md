@@ -52,20 +52,25 @@ cd python
 ./run_mspa.sh -i input.tif -o output.tif
 ```
 
-If no usable `.venv` exists, it creates one with Python 3.10-3.13 and installs
+If no usable `.venv` exists, it creates one with Python 3.10-3.14 and installs
 `requirements.txt`.  If an existing environment is missing packages, it
 installs them; if it is unusable, the script tells you to remove it and rerun.
 On Ubuntu you may need `sudo apt install python3-venv` (and the matching
-`python3.10-venv` package if Python 3.10 is the only supported interpreter).
+`python3.13-venv` package if only one interpreter is available).
 
-Python 3.14 is not supported by Numba yet; use 3.10-3.13.  On native Windows
-ARM64 use Python 3.12 or 3.13: Numba 0.68+ is selected automatically there
-because those are the first releases with ARM64 wheels.  The batch launcher looks for `py -3.x`, `python3.x`, and the
-standard install paths.  Native Windows-on-ARM installs live in a directory
-such as `%LOCALAPPDATA%\Programs\Python\Python313-arm64`; that path is checked
-before the x64/emulated ones.  If Python still is not found, run `py -0p` to
-list registered interpreters, enable "Add Python to PATH" in the installer,
-or pass the full path explicitly:
+Python 3.10-3.13 use Numba 0.61; Python 3.14 uses Numba 0.68, which has
+Python 3.14 wheels for Linux, Windows and Apple-silicon macOS.  There is no
+Numba 0.68 wheel for Intel macOS, so Python 3.14 on an Intel Mac falls back to
+the slow pure-Python engine; use Python 3.12/3.13 there.  Use the standard
+GIL-enabled build: the free-threaded `3.14t` build has no Numba wheel on
+Linux/Windows.  On native Windows ARM64 use Python 3.12 or newer.
+
+The batch launcher looks for `py -3.x`, `python3.x`, and the standard install
+paths.  Native Windows-on-ARM installs live in a directory such as
+`%LOCALAPPDATA%\Programs\Python\Python313-arm64`; that path is checked before
+the x64/emulated ones.  If Python still is not found, run `py -0p` to list
+registered interpreters, enable "Add Python to PATH" in the installer, or pass
+the full path explicitly:
 
 ```bat
 set MSPA_PYTHON=%LOCALAPPDATA%\Programs\Python\Python313-arm64\python.exe
@@ -274,9 +279,9 @@ MSPA_NUMBA_LAYER=omp ./run_mspa.sh -i input.tif -o output.tif
 Installing `tbb` into the venv is optional; the default workqueue path does
 not need it.
 
-Python 3.10 is supported by Numba. Prefer a Python version with a Numba wheel
-(for example 3.12); extremely new interpreters such as 3.14 may not yet be
-supported by Numba.
+Python 3.10-3.14 are supported when Numba provides wheels for the platform
+(see the install notes above).  If Numba is unavailable the engine still
+produces identical results, but runs in a much slower pure-Python mode.
 
 ## Class codes
 

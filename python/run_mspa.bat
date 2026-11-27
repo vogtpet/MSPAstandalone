@@ -47,25 +47,29 @@ rem Native Windows-on-ARM installations use a -arm64 suffix; try them before
 rem the x64/emulated ones so Numba and NumPy run natively.
 call :try_exe "%LOCALAPPDATA%\Programs\Python\Python313-arm64\python.exe"
 call :try_exe "%LOCALAPPDATA%\Programs\Python\Python312-arm64\python.exe"
+call :try_exe "%LOCALAPPDATA%\Programs\Python\Python314-arm64\python.exe"
 call :try_exe "%LOCALAPPDATA%\Programs\Python\Python311-arm64\python.exe"
 call :try_exe "%LOCALAPPDATA%\Programs\Python\Python310-arm64\python.exe"
 
 rem Standard per-user installs (python.org default).
 call :try_exe "%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
 call :try_exe "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+call :try_exe "%LOCALAPPDATA%\Programs\Python\Python314\python.exe"
 call :try_exe "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
 call :try_exe "%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
 
-rem The py launcher, newest supported version first.  This also finds
-rem installs that are registered but not on PATH.
+rem The py launcher; prefer the 3.13/3.12 Numba branch, then 3.14.  This also
+rem finds installs that are registered but not on PATH.
 if not defined PY call :try_py -3.13
 if not defined PY call :try_py -3.12
+if not defined PY call :try_py -3.14
 if not defined PY call :try_py -3.11
 if not defined PY call :try_py -3.10
 
 rem All-users installs.
 call :try_exe "%ProgramFiles%\Python313\python.exe"
 call :try_exe "%ProgramFiles%\Python312\python.exe"
+call :try_exe "%ProgramFiles%\Python314\python.exe"
 call :try_exe "%ProgramFiles%\Python311\python.exe"
 call :try_exe "%ProgramFiles%\Python310\python.exe"
 
@@ -82,8 +86,8 @@ if not defined PY call :try_cmd python3
 if not defined PY call :try_cmd python
 
 if not defined PY (
-    echo ERROR: could not find a usable Python 3.10-3.13 installation. 1>&2
-    echo Install Python 3.10-3.13 ^(3.12 or newer for native Windows ARM64^) 1>&2
+    echo ERROR: could not find a usable Python 3.10-3.14 installation. 1>&2
+    echo Install Python 3.10-3.14 ^(3.12 or newer for native Windows ARM64^) 1>&2
     echo and enable "Add Python to PATH" in the installer. 1>&2
     echo. 1>&2
     echo Already installed?  List the registered interpreters with: 1>&2
@@ -98,17 +102,33 @@ if not defined PY (
 )
 
 :check
-"%PY%" -c "import numpy, scipy, numba, PIL" >nul 2>&1
+"%PY%" -c "import numpy, scipy, PIL" >nul 2>&1
 if errorlevel 1 (
     echo Installing MSPA Python requirements into "%PY%" ...
     "%PY%" -m pip install --upgrade pip
     "%PY%" -m pip install -r "%REQUIREMENTS%"
     if errorlevel 1 (
-        echo ERROR: dependency installation failed. 1>&2
-        echo Remove "%VENV%" and rerun, or use Python 3.10-3.13. 1>&2
-        echo On Windows ARM64 the Numba 0.68 wheels are used automatically. 1>&2
+        echo WARNING: the full install failed; installing the core packages only. 1>&2
+        "%PY%" -m pip install numpy scipy Pillow
+        if errorlevel 1 (
+            echo ERROR: dependency installation failed. 1>&2
+            echo Remove "%VENV%" and rerun, or use Python 3.10-3.14. 1>&2
+            echo On Windows ARM64 the Numba 0.68 wheels are used automatically. 1>&2
+            exit /b 2
+        )
+    )
+    "%PY%" -c "import numpy, scipy, PIL" >nul 2>&1
+    if errorlevel 1 (
+        echo ERROR: the core Python packages are still missing. 1>&2
         exit /b 2
     )
+)
+
+"%PY%" -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('numba') else 1)" >nul 2>&1
+if errorlevel 1 (
+    echo WARNING: numba is not available for this interpreter. 1>&2
+    echo          MSPA will run correctly but much more slowly in pure Python. 1>&2
+    echo          Use Python 3.12/3.13 for the fastest setup. 1>&2
 )
 
 "%PY%" "%HERE%run_mspa.py" %*
@@ -120,9 +140,9 @@ rem --- helpers -------------------------------------------------------------
 rem Create the venv with a concrete python.exe path (%~1), if supported.
 if defined PY goto :eof
 if not exist "%~1" goto :eof
-rem Accept Python 3.10-3.13.  Native Windows ARM64 needs 3.12+ because Numba
+rem Accept Python 3.10-3.14.  Native Windows ARM64 needs 3.12+ because Numba
 rem only publishes ARM64 wheels for those versions.
-"%~1" -c "import sys, platform; ok = (3, 10) <= sys.version_info[:2] <= (3, 13) and (platform.machine() != 'ARM64' or sys.version_info[:2] >= (3, 12)); raise SystemExit(0 if ok else 1)" >nul 2>&1
+"%~1" -c "import sys, platform; ok = (3, 10) <= sys.version_info[:2] <= (3, 14) and (platform.machine() != 'ARM64' or sys.version_info[:2] >= (3, 12)); raise SystemExit(0 if ok else 1)" >nul 2>&1
 if errorlevel 1 goto :eof
 "%~1" -m venv "%VENV%" >nul 2>&1
 if exist "%VENV%\Scripts\python.exe" set "PY=%VENV%\Scripts\python.exe"
@@ -133,7 +153,7 @@ rem Create the venv through the py launcher: %~1 is a version selector.
 if defined PY goto :eof
 where py >nul 2>&1
 if errorlevel 1 goto :eof
-py %~1 -c "import sys, platform; ok = (3, 10) <= sys.version_info[:2] <= (3, 13) and (platform.machine() != 'ARM64' or sys.version_info[:2] >= (3, 12)); raise SystemExit(0 if ok else 1)" >nul 2>&1
+py %~1 -c "import sys, platform; ok = (3, 10) <= sys.version_info[:2] <= (3, 14) and (platform.machine() != 'ARM64' or sys.version_info[:2] >= (3, 12)); raise SystemExit(0 if ok else 1)" >nul 2>&1
 if errorlevel 1 goto :eof
 py %~1 -m venv "%VENV%" >nul 2>&1
 if exist "%VENV%\Scripts\python.exe" set "PY=%VENV%\Scripts\python.exe"

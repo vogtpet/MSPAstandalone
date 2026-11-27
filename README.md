@@ -383,7 +383,8 @@ cd python
 ```
 
 On first use the launcher creates `.venv` and installs `requirements.txt`
-automatically (Python 3.10-3.13; Numba does not support Python 3.14 yet).
+automatically (Python 3.10-3.14; Numba 0.68 provides the Python 3.14 wheels,
+except on Intel macOS).
 
 The wrapper runs the preflight automatically and refuses to start if the map
 is not expected to fit. You can also run `preflight.py` separately and use

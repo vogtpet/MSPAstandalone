@@ -13,20 +13,35 @@ if [ -z "${NUMBA_THREADING_LAYER:-}" ]; then
 fi
 
 deps_ok() {
-    "$1" -c 'import numpy, scipy, numba, PIL' >/dev/null 2>&1
+    "$1" -c 'import numpy, scipy, PIL' >/dev/null 2>&1
 }
 
 supported_python() {
-    "$1" -c 'import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 13) else 1)' >/dev/null 2>&1
+    "$1" -c 'import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 14) else 1)' >/dev/null 2>&1
 }
 
 install_deps() {
     echo "Installing MSPA Python requirements into $1 ..." >&2
     "$1" -m pip install --upgrade pip >&2
-    "$1" -m pip install -r "$requirements" >&2
+    if ! "$1" -m pip install -r "$requirements" >&2; then
+        echo "WARNING: the full install failed; installing the core packages only." >&2
+        "$1" -m pip install numpy scipy Pillow >&2
+    fi
+    if ! "$1" -c 'import numba' >/dev/null 2>&1; then
+        echo "WARNING: numba is not available for this interpreter." >&2
+        echo "         MSPA will run correctly but much more slowly in pure Python." >&2
+        echo "         Use Python 3.12/3.13 for the fastest setup." >&2
+    fi
+}
+
+numba_present() {
+    "$1" -c 'import importlib.util, sys; sys.exit(0 if importlib.util.find_spec("numba") else 1)' >/dev/null 2>&1
 }
 
 run_with() {
+    if ! numba_present "$1"; then
+        echo "WARNING: running without numba; MSPA will be much slower." >&2
+    fi
     exec "$1" "$here/run_mspa.py" "${@:2}"
 }
 
@@ -77,16 +92,16 @@ done
 
 # Fresh setup: pick a Python version supported by Numba.
 python_bin=""
-for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
+for candidate in python3.13 python3.12 python3.14 python3.11 python3.10 python3; do
     if command -v "$candidate" >/dev/null 2>&1 && supported_python "$candidate"; then
         python_bin="$(command -v "$candidate")"
         break
     fi
 done
 if [ -z "$python_bin" ]; then
-    echo "ERROR: no Python 3.10-3.13 interpreter found." >&2
-    echo "Numba does not support Python 3.14 yet. On Ubuntu install e.g.:" >&2
-    echo "  sudo apt install python3.10-venv" >&2
+    echo "ERROR: no Python 3.10-3.14 interpreter found." >&2
+    echo "On Ubuntu install the matching venv package, for example:" >&2
+    echo "  sudo apt install python3.13-venv" >&2
     exit 2
 fi
 
@@ -94,6 +109,7 @@ echo "No usable Python environment found. Creating $here/.venv with $python_bin 
 if ! "$python_bin" -m venv "$here/.venv"; then
     echo "ERROR: could not create the virtual environment." >&2
     echo "On Ubuntu you may need: sudo apt install python3-venv" >&2
+    echo "or the version-specific package, e.g. sudo apt install python3.14-venv" >&2
     exit 2
 fi
 

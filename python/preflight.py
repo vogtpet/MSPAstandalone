@@ -158,6 +158,14 @@ def _read_windows_memory() -> tuple[int | None, int | None]:
         return None, None
 
 
+def _numba_available() -> bool:
+    try:
+        import importlib.util
+        return importlib.util.find_spec("numba") is not None
+    except Exception:
+        return False
+
+
 def _system_cpus() -> int:
     return max(1, os.cpu_count() or 1)
 
@@ -379,9 +387,13 @@ def print_report(info: ImageInfo, hardware: Hardware, estimate: Estimate,
     else:
         print("RAM verdict:        NO")
         print(f"Shortfall:          {format_bytes(estimate.shortfall_bytes)}")
-    print(f"Estimated time:     {format_duration(estimate.estimated_seconds)} "
-          f"steady state, plus ~{estimate.first_run_compile_seconds:.0f} s "
-          f"first-run Numba compile")
+    if _numba_available():
+        print(f"Estimated time:     {format_duration(estimate.estimated_seconds)} "
+              f"steady state, plus ~{estimate.first_run_compile_seconds:.0f} s "
+              f"first-run Numba compile")
+    else:
+        print(f"Estimated time:     {format_duration(estimate.estimated_seconds)} "
+              f"with numba; numba is unavailable, so expect much longer")
     if estimate.disk is not None:
         d = estimate.disk
         print(f"Output directory:   {d.output_dir}")
