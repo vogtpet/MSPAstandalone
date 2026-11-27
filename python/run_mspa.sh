@@ -20,7 +20,24 @@ supported_python() {
     "$1" -c 'import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 14) else 1)' >/dev/null 2>&1
 }
 
+ensure_pip() {
+    if "$1" -m pip --version >/dev/null 2>&1; then
+        return 0
+    fi
+    echo "pip is missing from $1; bootstrapping it ..." >&2
+    "$1" -m ensurepip --upgrade >&2 2>/dev/null || "$1" -m ensurepip >&2 2>/dev/null || true
+    "$1" -m pip --version >/dev/null 2>&1
+}
+
 install_deps() {
+    if ! ensure_pip "$1"; then
+        echo "ERROR: this Python environment has no pip:" >&2
+        echo "       $1" >&2
+        echo "On Ubuntu/Debian install the matching venv package, for example:" >&2
+        echo "  sudo apt install python3.14-venv python3-pip" >&2
+        echo "Then remove .venv and rerun this script to recreate it." >&2
+        return 1
+    fi
     echo "Installing MSPA Python requirements into $1 ..." >&2
     "$1" -m pip install --upgrade pip >&2
     if ! "$1" -m pip install -r "$requirements" >&2; then
@@ -52,7 +69,7 @@ if [ -n "${MSPA_PYTHON:-}" ]; then
         exit 2
     fi
     if ! deps_ok "$MSPA_PYTHON"; then
-        echo "ERROR: MSPA_PYTHON lacks numpy/scipy/numba/Pillow:" >&2
+        echo "ERROR: MSPA_PYTHON lacks numpy/scipy/Pillow:" >&2
         echo "       $MSPA_PYTHON" >&2
         exit 2
     fi

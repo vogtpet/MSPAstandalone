@@ -105,6 +105,17 @@ if not defined PY (
 "%PY%" -c "import numpy, scipy, PIL" >nul 2>&1
 if errorlevel 1 (
     echo Installing MSPA Python requirements into "%PY%" ...
+    "%PY%" -m pip --version >nul 2>&1
+    if errorlevel 1 (
+        echo Bootstrapping pip in "%PY%" ...
+        "%PY%" -m ensurepip --upgrade >nul 2>&1
+    )
+    "%PY%" -m pip --version >nul 2>&1
+    if errorlevel 1 (
+        echo ERROR: pip is missing from "%PY%". 1>&2
+        echo Recreate the environment with: python -m venv "%VENV%" 1>&2
+        exit /b 2
+    )
     "%PY%" -m pip install --upgrade pip
     "%PY%" -m pip install -r "%REQUIREMENTS%"
     if errorlevel 1 (

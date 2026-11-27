@@ -56,7 +56,9 @@ If no usable `.venv` exists, it creates one with Python 3.10-3.14 and installs
 `requirements.txt`.  If an existing environment is missing packages, it
 installs them; if it is unusable, the script tells you to remove it and rerun.
 On Ubuntu you may need `sudo apt install python3-venv` (and the matching
-`python3.13-venv` package if only one interpreter is available).
+versioned package, for example `python3.14-venv python3-pip`).  A `.venv`
+created before those packages were installed can lack `pip`; the launcher
+bootstraps it with `ensurepip`, and removing `.venv` also recreates it cleanly.
 
 Python 3.10-3.13 use Numba 0.61; Python 3.14 uses Numba 0.68, which has
 Python 3.14 wheels for Linux, Windows and Apple-silicon macOS.  There is no
