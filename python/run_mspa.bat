@@ -133,6 +133,8 @@ rem Create the venv through the py launcher: %~1 is a version selector.
 if defined PY goto :eof
 where py >nul 2>&1
 if errorlevel 1 goto :eof
+py %~1 -c "import sys, platform; ok = (3, 10) <= sys.version_info[:2] <= (3, 13) and (platform.machine() != 'ARM64' or sys.version_info[:2] >= (3, 12)); raise SystemExit(0 if ok else 1)" >nul 2>&1
+if errorlevel 1 goto :eof
 py %~1 -m venv "%VENV%" >nul 2>&1
 if exist "%VENV%\Scripts\python.exe" set "PY=%VENV%\Scripts\python.exe"
 goto :eof
