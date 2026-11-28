@@ -360,7 +360,8 @@ ERROR_TYPE u32_label(IMAGE *im1, IMAGE *im2, int ox, int oy, int oz)
   FIFO4 *q;
   size_t nx, ny, nz; /* FIXED: Changed to size_t to prevent 32-bit integer overflow */
   int box[BOXELEM];
-  int fast_se = u32_label_fast_se(im2, ox, oy, oz);
+  int fast_se = (GetImNz(im1) == 1)
+                  ? u32_label_fast_se(im2, ox, oy, oz) : 0;
 
   if (fast_se){
     ERROR_TYPE st = u32_label_runs(im1, fast_se);
