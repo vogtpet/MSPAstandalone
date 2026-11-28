@@ -43,6 +43,8 @@ see http://dx.doi.org/10.1016/j.patrec.2008.10.015
 from __future__ import annotations
 
 import os
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -724,15 +726,78 @@ def _nb_sqedt(mask, nt):
     return g
 
 
-def _edt32(mask: np.ndarray) -> np.ndarray:
-    """Distance transform with the C code's float32 rounding.
+@njit(parallel=True, cache=True)
+def _nb_edt_band64(mask, nt, threshold, strict):
+    """Thresholded exact EDT for images wider than 65535 px.
 
-    miallib converts the exact squared integer distance to float32, takes a
-    float32 square root and compares it with a float32 threshold.  Reproduce
-    that so threshold ties (e.g. eew=1.02 -> size*edu == 2) behave identically.
+    miallib switches to ``ucu64_sqedt`` above 65535 px per side and compares
+    a double-precision distance.  This kernel reproduces its two passes but
+    writes only the thresholded uint8 mask, avoiding a full float64/uint64
+    distance image (which would need another 8 bytes per pixel).
+
+    ``strict`` selects getcore's ``threshold < dist < MIALFLOAT_MAX`` test;
+    otherwise getexternalboundary's inclusive ``dist <= threshold`` is used.
     """
-    if _HAVE_NUMBA and max(mask.shape) <= 65535:
-        # miallib uses uint32 squared distances for images up to 65535 px.
+    ny, nx = mask.shape
+    bigval = np.uint32(2 ** 31 - 1)
+    g = np.empty((ny, nx), dtype=np.uint32)
+
+    # Pass 1: vertical distance to the nearest zero, exactly as ucu64_sqedt.
+    for t in prange(nt):
+        xs = (nx * t) // nt
+        xe = (nx * (t + 1)) // nt
+        for x in range(xs, xe):
+            if mask[0, x] == 0:
+                g[0, x] = 0
+            else:
+                g[0, x] = bigval
+            for y in range(1, ny):
+                if mask[y, x] == 0:
+                    g[y, x] = 0
+                else:
+                    g[y, x] = g[y - 1, x] + np.uint32(1)
+            for y in range(ny - 2, -1, -1):
+                below = g[y + 1, x] + np.uint32(1)
+                if below < g[y, x]:
+                    g[y, x] = below
+
+    # Pass 2: combine the vertical distances horizontally and threshold.
+    out = np.zeros((ny, nx), dtype=np.uint8)
+    for t in prange(nt):
+        ys = (ny * t) // nt
+        ye = (ny * (t + 1)) // nt
+        f = np.empty(nx, dtype=np.float64)
+        d = np.empty(nx, dtype=np.float64)
+        v = np.empty(nx, dtype=np.int32)
+        z = np.empty(nx + 1, dtype=np.float64)
+        for y in range(ys, ye):
+            for x in range(nx):
+                gv = np.float64(g[y, x])
+                f[x] = gv * gv
+            _nb_dt1d(f, nx, d, v, z)
+            if strict:
+                for x in range(nx):
+                    dist = np.sqrt(d[x])
+                    if dist > threshold and dist < 3.4028235e38:
+                        out[y, x] = 1
+            else:
+                for x in range(nx):
+                    if np.sqrt(d[x]) <= threshold:
+                        out[y, x] = 1
+    return out
+
+
+def _edt32(mask: np.ndarray) -> np.ndarray:
+    """Distance transform with the C code's numeric types.
+
+    For images up to 65535 px per side miallib uses uint32 squared distances:
+    it converts them to float32, takes a float32 square root and compares with
+    a float32 threshold.  Above that it uses uint64 distances, converts them
+    to double and compares in double precision.  Reproduce both so threshold
+    ties (e.g. eew=1.02 -> size*edu == 2) behave identically.
+    """
+    large = max(mask.shape) > 65535
+    if _HAVE_NUMBA and not large:
         import numba
         sq = _nb_sqedt(np.ascontiguousarray(mask, dtype=np.uint8),
                        max(1, numba.get_num_threads()))
@@ -740,8 +805,30 @@ def _edt32(mask: np.ndarray) -> np.ndarray:
         np.sqrt(dist, out=dist)
         return dist
     dist = _edt(mask)
+    if large:
+        return dist.astype(np.float64)
     sq = np.rint(dist * dist).astype(np.float32)
     return np.sqrt(sq).astype(np.float32)
+
+
+def _threshold_edt(mask: np.ndarray, threshold: np.float32,
+                   strict: bool) -> np.ndarray:
+    """Return the thresholded distance mask with the C code's semantics.
+
+    Uses the fused parallel kernel for maps wider/taller than 65535 px, so
+    the large-image path does not fall back to scipy's serial EDT.
+    """
+    if _HAVE_NUMBA and max(mask.shape) > 65535:
+        import numba
+        return _nb_edt_band64(
+            np.ascontiguousarray(mask, dtype=np.uint8),
+            max(1, numba.get_num_threads()),
+            np.float64(threshold), strict)
+    dist = _edt32(mask)
+    if strict:
+        return ((dist > threshold)
+                & (dist < np.float32(3.4028235e38))).astype(np.uint8)
+    return (dist <= threshold).astype(np.uint8)
 
 
 def _radius(size: float, edu: float = EDU) -> np.float32:
@@ -755,8 +842,7 @@ def getcore(im: np.ndarray, size: float, edu: float = EDU) -> np.ndarray:
     boundary is STRICTLY greater than size*edu.
     f_threshstrict(dist, size*edu, MIALFLOAT_MAX) -> size*edu < dist < MAX.
     """
-    dist = _edt32(im.astype(bool))             # sqrt(sqedt(im)) in float32
-    core = (dist > _radius(size, edu)) & (dist < np.float32(3.4028235e38))
+    core = _threshold_edt(im.astype(bool), _radius(size, edu), strict=True)
     return core.astype(np.uint8)
 
 
@@ -770,8 +856,7 @@ def getexternalboundary(im: np.ndarray, size: float, edu: float = EDU) -> np.nda
       AND nim                        # keep only background pixels
     """
     nim = (im == 0)                            # negation: background = 1
-    dist = _edt32(nim)                         # distance to nearest background
-    band = dist <= _radius(size, edu)          # 0 <= dist <= size*edu
+    band = _threshold_edt(nim, _radius(size, edu), strict=False) != 0
     return (band & nim).astype(np.uint8)
 
 
@@ -817,12 +902,15 @@ def getpatch(im: np.ndarray, size: float, graphfg: int, edu: float = EDU,
 
 
 @njit(cache=True)
-def _nb_fillhole(im, graph):
-    """Fill background components that do not touch the image border."""
+def _nb_fillhole(im, graph, q):
+    """Fill background components that do not touch the image border.
+
+    ``q`` is allocated by the caller with int32 indices for images up to
+    2**31 pixels and int64 above that.  The flat pixel index no longer fits in
+    int32 on the large maps this module supports.
+    """
     ny, nx = im.shape
-    npix = nx * ny
     reached = np.zeros((ny, nx), dtype=np.uint8)
-    q = np.empty(npix, dtype=np.int32)
     head = 0
     tail = 0
 
@@ -885,13 +973,18 @@ def uc_fillhole(im: np.ndarray, graph: int) -> np.ndarray:
     Equivalent to ndi.binary_fill_holes with the given connectivity.
     """
     if _HAVE_NUMBA:
-        return _nb_fillhole(np.ascontiguousarray(im, dtype=np.uint8), graph)
+        data = np.ascontiguousarray(im, dtype=np.uint8)
+        npix = data.size
+        qdtype = np.int32 if npix <= 2 ** 31 else np.int64
+        q = np.empty(npix, dtype=qdtype)
+        return _nb_fillhole(data, graph, q)
     return _ndi.binary_fill_holes(im.astype(bool),
                                   structure=_struct(graph)).astype(np.uint8)
 
 
 def setedges(im: np.ndarray, size: float, graphfg: int, graphbg: int,
-             edu: float = EDU, core: np.ndarray | None = None):
+             edu: float = EDU, core: np.ndarray | None = None,
+             progress=None):
     """
     setedges (mspa.c:256): returns (edges, perforation).
 
@@ -925,9 +1018,13 @@ def setedges(im: np.ndarray, size: float, graphfg: int, graphbg: int,
     loecher = corefill & ~core
     edges = np.zeros_like(im_b)
 
+    iteration = 0
     while True:
         if not corefill.any():                 # volume(corefill) == 0
             break
+        iteration += 1
+        if progress is not None:
+            progress(f"setedges iteration {iteration}")
         crt_edges = getexternalboundary(corefill.astype(np.uint8), size, edu).astype(bool)
         edges |= crt_edges
         i0 = uc_fillhole(loecher.astype(np.uint8), graphfg).astype(bool)
@@ -936,6 +1033,8 @@ def setedges(im: np.ndarray, size: float, graphfg: int, graphbg: int,
         corefill = uc_fillhole(core.astype(np.uint8), graphbg).astype(bool)
         loecher = corefill & ~core
 
+    if progress is not None:
+        progress(f"setedges finished after {iteration} iterations")
     outer = getexternalboundary(core1.astype(np.uint8), size, edu).astype(bool)
     edges &= ~core1                            # bitwise AND negation(core1)
     perforation = outer & ~edges               # outer - edges
@@ -1687,7 +1786,8 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
                             graphfg: int = 8, transition: int = 1,
                             internal: int = 1, n_jobs: int | None = None,
                             memmap_dir: str | None = None,
-                            memmap_min_bytes: int = 64 * 1024 * 1024) -> np.ndarray:
+                            memmap_min_bytes: int = 64 * 1024 * 1024,
+                            progress: bool = False) -> np.ndarray:
     """
     Pure-Python port of segmentBinaryPatterns (mspa.c).
 
@@ -1715,17 +1815,31 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
         Arrays at least this large are mapped to files when memmap_dir is
         set (default: 64 MiB).  Set to 0 to map every workspace allocation
         (used by the parity tests).
+    progress : bool
+        Print the effective thread count and per-stage timings to stderr.
+        Useful for long runs; the result is unchanged.
     """
     if memmap_dir is not None:
         with workspace_context(memmap_dir, memmap_min_bytes):
             return segment_binary_patterns(
-                imin, edge_width, graphfg, transition, internal, n_jobs)
+                imin, edge_width, graphfg, transition, internal, n_jobs,
+                progress=progress)
     imin = np.asarray(imin)
     if imin.dtype != np.uint8:
         imin = imin.astype(np.uint8)
     if n_jobs is None:
         n_jobs = available_cpus()
     n_jobs = max(1, int(n_jobs))
+
+    started = time.perf_counter()
+
+    def log(msg: str) -> None:
+        if progress:
+            print(f"MSPA: {msg} [{time.perf_counter() - started:.1f}s]",
+                  file=sys.stderr, flush=True)
+
+    max_threads = 0
+    layer = "none"
     if _HAVE_NUMBA:
         import numba
         # Numba's maximum can be lower than the OS CPU count (affinity,
@@ -1733,6 +1847,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
         # permits; a failed threading-layer setup falls back to one thread
         # rather than aborting the whole run.
         max_threads = int(getattr(numba.config, "NUMBA_NUM_THREADS", 0) or 0)
+        layer = str(getattr(numba.config, "THREADING_LAYER", "unknown"))
         if max_threads > 0:
             n_jobs = min(n_jobs, max_threads)
         try:
@@ -1743,6 +1858,14 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
                 numba.set_num_threads(1)
             except Exception:
                 pass
+        if progress:
+            log(f"{imin.size:,} pixels; {n_jobs} threads "
+                f"(Numba max {max_threads or '?'}, layer {layer})")
+    elif progress:
+        log(f"{imin.size:,} pixels; numba unavailable, serial run")
+    if progress:
+        log("note: only the distance-transform stages are parallel; "
+            "most stages run on one core")
 
     if graphfg == 8:
         graphbg, oitype = 4, 0
@@ -1758,6 +1881,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     F = bufsize + 1
 
     # frame the input with nodata (0)
+    log("framing and preprocessing")
     im = addframebox(imin, box, 0)
 
     # main preprocessing (serial prerequisite for the independent stages)
@@ -1765,6 +1889,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     i0 = subframebox(i0, box)
     i0 = fm_preproc2(i0, F)
     i0b = i0.astype(bool)
+    log("preprocessing done")
 
     # ------------------------------------------------------------------
     # Mutually independent stages. Each reads only i0 (or im) and writes a
@@ -1776,15 +1901,17 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     # ------------------------------------------------------------------
     # core is a single distance transform; compute it once up front and reuse
     # it in getpatch, setedges and opening, saving two redundant full-image
-    # EDTs (the EDT is scipy's internally multi-threaded op, so running it once
-    # on its own already uses many cores).
+    # EDTs.  The EDT is the main parallel kernel in the engine.
+    log("core distance transform")
     core = getcore(i0, size, edu).astype(bool)
+    log("core distance transform done")
 
     def _task_patch():
         return getpatch(i0, size, graphfg, edu, core=core.astype(np.uint8)).astype(bool)
 
     def _task_edges():
-        e, p = setedges(i0, size, graphfg, graphbg, edu, core=core)
+        e, p = setedges(i0, size, graphfg, graphbg, edu, core=core,
+                        progress=log)
         return e.astype(bool), p.astype(bool)
 
     def _task_holes():
@@ -1795,6 +1922,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     # With Numba the EDT itself is parallel, so run these stages sequentially
     # to avoid oversubscribing the CPU.  The pure-Python fallback keeps the
     # thread pool, where scipy releases the GIL.
+    log("patch / edges / holes")
     if (not _HAVE_NUMBA) and n_jobs > 1:
         with ThreadPoolExecutor(max_workers=n_jobs) as ex:
             f_edges = ex.submit(_task_edges)
@@ -1807,6 +1935,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
         patch = _task_patch()
         edges, perf = _task_edges()
         allHoles = _task_holes() if internal == 1 else None
+    log("patch / edges / holes done")
 
     # when box == F the allHoles frame already matches i0; otherwise reframe.
     if internal == 1 and allHoles.shape != i0b.shape:
@@ -1843,12 +1972,15 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     core_work[:, :2] = False
     core_work[:, -2:] = False
 
+    log("connector")
     connector = getconnector2core(core_work.astype(np.uint8), opening.astype(np.uint8),
                                   residues.astype(np.uint8), size, oitype, graphfg,
                                   edu).astype(bool)
+    log("corridor")
     corridor = getcorridor(connector.astype(np.uint8), core_work.astype(np.uint8),
                            opening.astype(np.uint8), graphfg).astype(bool)
     del opening
+    log("connector / corridor done")
 
     out = out | (core_work.astype(np.uint8) << 4)  # core = 16
     shortcut = connector & ~corridor              # shortcut = connector - corridor
@@ -1862,6 +1994,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     out = out | (shortcut.astype(np.uint8) << 6)  # loop   = 64
 
     if internal == 1:
+        log("internal fill")
         tmp = uc_fillhole(core_work.astype(np.uint8), graphbg).astype(bool)
         coreHoles = tmp & ~core
         # allHoles = allHoles AND NOT coreHoles
@@ -1880,4 +2013,5 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     nodata = (imin == 0)
     out[nodata] = 129
 
+    log("done")
     return out.astype(np.uint8)

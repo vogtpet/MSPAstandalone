@@ -56,6 +56,8 @@ def parse_args() -> argparse.Namespace:
                    help="do not check RAM/disk before starting")
     p.add_argument("--force", action="store_true",
                    help="run even if the preflight says it may not fit")
+    p.add_argument("--quiet", action="store_true",
+                   help="do not print progress/stage timings")
     return p.parse_args()
 
 
@@ -78,6 +80,10 @@ def main() -> int:
         try:
             info = preflight.inspect_image(args.input)
             hardware = preflight.detect_hardware()
+            if args.jobs is not None:
+                # Use the requested thread count for the time estimate.
+                hardware = preflight.detect_hardware(
+                    available_cpus=max(1, int(args.jobs)))
             estimate = preflight.build_estimate(
                 info, hardware, args.edge_width, out_path.parent, args.memmap_dir
             )
@@ -134,6 +140,7 @@ def main() -> int:
         n_jobs=args.jobs,
         memmap_dir=str(args.memmap_dir) if args.memmap_dir is not None else None,
         memmap_min_bytes=max(0, int(args.memmap_min_mb * 1024 * 1024)),
+        progress=not args.quiet,
     )
 
     image = Image.fromarray(np.ascontiguousarray(out, dtype=np.uint8), mode="P")

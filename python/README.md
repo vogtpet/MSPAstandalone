@@ -189,8 +189,9 @@ python preflight.py --width 650000 --height 460000 --cpus 170 \
 
 Hardware detection supports Linux (`/proc/meminfo`), macOS (`hw.memsize` and
 `vm_stat`, or `psutil`), and Windows (`GlobalMemoryStatusEx`).  `--cpus`,
-`--total-ram-gb`, `--available-ram-gb`, `--cpus`, `--available-cpus`,
+`--total-ram-gb`, `--available-ram-gb`, `--available-cpus`,
 `--memmap-dir`, `--memmap-free-gb` and `--json` are available for scripting
+
 and for planning runs on another machine.
 
 The engine's default thread count follows the available (`nproc`) count.  An
@@ -202,6 +203,14 @@ baseline allowance, 1.10x safety factor and a 10% RAM reserve; maps above
 2³¹ pixels add an allowance for 64-bit queues.  It is
 deliberately conservative: a "NO" means the current in-memory design should
 not be attempted.
+
+The time estimate is a **lower bound**, not a promise.  Only the Euclidean
+distance transforms (`getcore` / `getexternalboundary`) are parallel; the
+thinning, geodesic propagation, watershed and hole-filling stages are serial.
+One core can therefore dominate the wall clock on large or complex maps, and
+a run can take several times longer than the reported figure.  The CLI prints
+per-stage timings by default (suppress with `--quiet`), so progress is visible
+on long runs.
 
 ## Run from the command line
 
@@ -267,6 +276,24 @@ For example, the default run carries the suffix `8_1_1_1`.
 The engine caps `-j` at Numba's configured maximum automatically; a request
 larger than the limit is reduced rather than aborting. On a very large host
 this is normal (for example 192 CPUs but a Numba maximum of 178).
+
+`-j` controls the parallel distance transforms only.  The other stages
+(anchored thinning, constrained geodesic distance, watershed and hole filling)
+are inherently serial and run on one core.  This matches the modest OpenMP
+speed-up of the C binary (about 1.25-1.55x at 16 threads).  The CLI prints the
+effective thread count and stage timings to stderr, for example:
+
+```text
+MSPA: 32,528,000,000 pixels; 150 threads (Numba max 178, layer workqueue)
+MSPA: core distance transform
+MSPA: core distance transform done
+MSPA: setedges iteration 3
+...
+```
+
+On maps wider or taller than 65535 px, miallib uses 64-bit squared distances;
+the Python engine now uses a fused parallel 64-bit EDT for that case instead
+of falling back to scipy's serial distance transform.
 
 The launchers set `NUMBA_THREADING_LAYER=workqueue` by default.  This uses
 Numba's bundled threading layer, avoids the misleading "TBB threading layer is
@@ -421,6 +448,10 @@ because the thinning, geodesic propagation and watershed stages are serial
   stage masks before the bridge test;
 * adaptive index queues: `int32` below 2³¹ pixels, `int64` only for larger
   maps, so normal-size rasters keep the smaller memory footprint;
+* a fused parallel 64-bit EDT for maps wider/taller than 65535 px, matching
+  miallib's `t_UINT64` path instead of falling back to SciPy's serial EDT;
+* per-stage progress/timing output in the CLI (`--quiet` to suppress), so
+  long serial stages are visible;
 * a storage-only memory-mapped mode for rasters beyond RAM (see above), with
   no change to the algorithm or results.
 

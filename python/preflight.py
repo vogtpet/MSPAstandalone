@@ -287,7 +287,9 @@ def build_estimate(info: ImageInfo, hardware: Hardware, edge_width: float,
     pixels = info.width * info.height
     bpp = engine_bytes_per_pixel(edge_width)
     if pixels > 2 ** 31:
-        # 64-bit queues are only needed above 2^31 pixels.
+        # 64-bit queues are only needed above 2^31 pixels.  The queues are
+        # sparse (np.empty pages are touched on demand), so this allowance
+        # covers the extra index width without counting a full-size queue.
         bpp += 1.5
     required = int((BASELINE_BYTES + bpp * pixels) * SAFETY_FACTOR)
     usable = None
@@ -394,6 +396,9 @@ def print_report(info: ImageInfo, hardware: Hardware, estimate: Estimate,
     else:
         print(f"Estimated time:     {format_duration(estimate.estimated_seconds)} "
               f"with numba; numba is unavailable, so expect much longer")
+    if estimate.pixels >= 1_000_000_000:
+        print("Time note:          lower bound; only the EDT stages are "
+              "parallel and serial stages often dominate on very large maps")
     if estimate.disk is not None:
         d = estimate.disk
         print(f"Output directory:   {d.output_dir}")
