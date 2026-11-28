@@ -24,18 +24,17 @@ require **glibc 2.35 or newer**. The extra `...-glibc2.31.tar.gz` archive is
 built on Debian 11 and requires only **glibc 2.31 or newer**. All variants
 produce identical MSPA output.
 
-The macOS archive contains the executable and two dynamic libraries; keep
-them together. The binary is ad-hoc signed and not notarised. After
-extracting, clear the quarantine from the whole folder and run it:
+The macOS archive contains a single self-contained executable. The binary
+is ad-hoc signed and not notarised. After extracting, clear the quarantine
+and run it:
 
 ```sh
 cd mspa-2.4.2-macos-arm64
 xattr -cr .
 ```
 
-Clearing only the executable is not enough — the two dylibs are quarantined
-too. Only a Developer ID signature plus Apple notarisation avoids the
-warning entirely.
+Only a Developer ID signature plus Apple notarisation avoids the warning
+entirely.
 
 The Windows binaries are unsigned; SmartScreen may show a warning.
 
