@@ -1867,6 +1867,30 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
         log("note: only the distance-transform stages are parallel; "
             "most stages run on one core")
 
+    stage_total = 8
+    stage_no = 0
+    stage_t0 = started
+    stage_name = ""
+
+    def stage(name: str) -> None:
+        """Start a numbered stage, reporting the duration of the previous."""
+        nonlocal stage_no, stage_t0, stage_name
+        now = time.perf_counter()
+        if stage_no:
+            log(f"[{stage_no}/{stage_total}] {stage_name} done in "
+                f"{now - stage_t0:.1f}s")
+        stage_no += 1
+        stage_name = name
+        stage_t0 = now
+        log(f"[{stage_no}/{stage_total}] {name}")
+
+    def end_stage() -> None:
+        nonlocal stage_no, stage_t0
+        if stage_no:
+            log(f"[{stage_no}/{stage_total}] {stage_name} done in "
+                f"{time.perf_counter() - stage_t0:.1f}s")
+            stage_no = 0
+
     if graphfg == 8:
         graphbg, oitype = 4, 0
     else:
@@ -1881,7 +1905,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     F = bufsize + 1
 
     # frame the input with nodata (0)
-    log("framing and preprocessing")
+    stage("framing and preprocessing")
     im = addframebox(imin, box, 0)
 
     # main preprocessing (serial prerequisite for the independent stages)
@@ -1889,7 +1913,6 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     i0 = subframebox(i0, box)
     i0 = fm_preproc2(i0, F)
     i0b = i0.astype(bool)
-    log("preprocessing done")
 
     # ------------------------------------------------------------------
     # Mutually independent stages. Each reads only i0 (or im) and writes a
@@ -1902,9 +1925,8 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     # core is a single distance transform; compute it once up front and reuse
     # it in getpatch, setedges and opening, saving two redundant full-image
     # EDTs.  The EDT is the main parallel kernel in the engine.
-    log("core distance transform")
+    stage("core distance transform")
     core = getcore(i0, size, edu).astype(bool)
-    log("core distance transform done")
 
     def _task_patch():
         return getpatch(i0, size, graphfg, edu, core=core.astype(np.uint8)).astype(bool)
@@ -1922,7 +1944,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     # With Numba the EDT itself is parallel, so run these stages sequentially
     # to avoid oversubscribing the CPU.  The pure-Python fallback keeps the
     # thread pool, where scipy releases the GIL.
-    log("patch / edges / holes")
+    stage("patch / edges / holes")
     if (not _HAVE_NUMBA) and n_jobs > 1:
         with ThreadPoolExecutor(max_workers=n_jobs) as ex:
             f_edges = ex.submit(_task_edges)
@@ -1935,7 +1957,6 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
         patch = _task_patch()
         edges, perf = _task_edges()
         allHoles = _task_holes() if internal == 1 else None
-    log("patch / edges / holes done")
 
     # when box == F the allHoles frame already matches i0; otherwise reframe.
     if internal == 1 and allHoles.shape != i0b.shape:
@@ -1948,6 +1969,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     del _task_patch, _task_edges, _task_holes
     del im
 
+    stage("bit assembly / opening")
     out = i0.astype(np.uint8)                     # FG base = bit0 = 1
     del i0
 
@@ -1972,15 +1994,14 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     core_work[:, :2] = False
     core_work[:, -2:] = False
 
-    log("connector")
+    stage("connector")
     connector = getconnector2core(core_work.astype(np.uint8), opening.astype(np.uint8),
                                   residues.astype(np.uint8), size, oitype, graphfg,
                                   edu).astype(bool)
-    log("corridor")
+    stage("corridor")
     corridor = getcorridor(connector.astype(np.uint8), core_work.astype(np.uint8),
                            opening.astype(np.uint8), graphfg).astype(bool)
     del opening
-    log("connector / corridor done")
 
     out = out | (core_work.astype(np.uint8) << 4)  # core = 16
     shortcut = connector & ~corridor              # shortcut = connector - corridor
@@ -1993,8 +2014,8 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     out = out | (corridor.astype(np.uint8) << 5)  # bridge = 32
     out = out | (shortcut.astype(np.uint8) << 6)  # loop   = 64
 
+    stage("internal fill")
     if internal == 1:
-        log("internal fill")
         tmp = uc_fillhole(core_work.astype(np.uint8), graphbg).astype(bool)
         coreHoles = tmp & ~core
         # allHoles = allHoles AND NOT coreHoles
@@ -2006,6 +2027,7 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
         out = out + tmp2_val                       # +100 internal twins / core-opening
         out = np.maximum(out, allHoles_val)        # SUP with 220 regions
 
+    stage("finalize")
     # crop frame
     out = subframebox(out, F)
 
@@ -2013,5 +2035,6 @@ def segment_binary_patterns(imin: np.ndarray, edge_width: float,
     nodata = (imin == 0)
     out[nodata] = 129
 
+    end_stage()
     log("done")
     return out.astype(np.uint8)

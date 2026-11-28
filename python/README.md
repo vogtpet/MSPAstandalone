@@ -285,9 +285,13 @@ effective thread count and stage timings to stderr, for example:
 
 ```text
 MSPA: 32,528,000,000 pixels; 150 threads (Numba max 178, layer workqueue)
-MSPA: core distance transform
-MSPA: core distance transform done
-MSPA: setedges iteration 3
+MSPA: [1/8] framing and preprocessing
+MSPA: [1/8] framing and preprocessing done in 35.2s
+MSPA: [2/8] core distance transform
+MSPA: [2/8] core distance transform done in 41.7s
+MSPA: [3/8] patch / edges / holes
+MSPA: setedges iteration 1
+MSPA: setedges iteration 2
 ...
 ```
 
