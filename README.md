@@ -175,9 +175,9 @@ the MSPA class codes listed above.
 
 ## Tested on
 
-* **Linux x86_64** – built on Ubuntu 22.04; the Debian 11 build (glibc 2.31)
-  was tested on Debian, Ubuntu, Fedora and openSUSE
-* **Linux aarch64** – Ubuntu 22.04 (native and CI)
+* **Linux x86_64** – Ubuntu 22.04 release build (glibc 2.35), plus a Debian 11
+  compatibility build for glibc 2.31
+* **Linux aarch64** – Ubuntu 22.04 (glibc 2.35)
 * **macOS ARM64** – Apple Silicon with Homebrew GCC
 * **Windows x86_64** – Windows 10/11 with MSYS2 UCRT64
 * **Windows ARM64** – Windows 11 with MSYS2 CLANGARM64
