@@ -438,6 +438,28 @@ temporaries, not algorithmic work.  C's OpenMP gains are themselves modest
 because the thinning, geodesic propagation and watershed stages are serial
 (16 threads are only about 1.25-1.55x faster than one thread).
 
+### Validated very large run (32.5 Gpx)
+
+A 214,000 x 152,000 map (Turkey), edge width 5, 8-connectivity and internal
+classes, was processed on a 192-core / 1.96 TiB Ubuntu host with `-j 150`.
+It finished in **3 h 29 min** (12,563 s) with an estimated peak RAM of
+1.24 TiB, and the result was **pixel-identical to the C binary**.  The
+timings show why the estimate is a lower bound:
+
+| Stage | Time |
+|---|---:|
+| framing / preprocessing | 3 min 44 s |
+| core distance transform (parallel) | 1 min 21 s |
+| patch / edges / holes (3 `setedges` iterations) | 1 h 54 min |
+| bit assembly / opening | 2 min 46 s |
+| connector | 49 min 36 s |
+| corridor | 16 min 6 s |
+| internal fill | 21 min 21 s |
+| finalize | 21 s |
+
+This run also exercised the 64-bit paths: the image has more than 2³¹ pixels
+and is wider than 65535 px.
+
 ### Implemented optimisations
 
 * exact squared EDT in Numba with thread-chunked `prange` (cacheable, uint32
