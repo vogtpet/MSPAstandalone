@@ -39,27 +39,13 @@ extern ERROR_TYPE d_threshstrict(IMAGE *im, double, double, double, double);
 
 IMAGE *getexternalboundary(IMAGE *im, float size, float edu, int sqedt_type)
 {
-  IMAGE *nim, *imsqedt, *edt;
+  IMAGE *nim, *edt;
 
   nim=(IMAGE *)copy_image(im);
   negation(nim);
-  imsqedt=(IMAGE *)sqedt(nim, sqedt_type);
-
-  if (sqedt_type == t_UINT32 ){
-    uint32_to_float(imsqedt);
-    imsqrt(imsqedt);
-    edt=imsqedt;
-    f_thresh(edt, 0.0,  size*edu, 0.0, 1.0);
-  }
-  else{
-    uint64_to_double(imsqedt);
-    imsqrt(imsqedt);
-    edt=imsqedt;
-    d_thresh(edt, 0.0,  size*edu, 0.0, 1.0);
-  }
-
-  to_uchar(edt);
-  bitwise_op(edt, nim, AND_op);
+  edt=uc_sqedt_band(nim, (float)(size*edu), 0, sqedt_type);
+  if (edt != NULL)
+    bitwise_op(edt, nim, AND_op);
 
   free_image(nim);
   return(edt);
@@ -247,26 +233,7 @@ IMAGE *fm_preproc2(IMAGE *im, int size)
  */
 IMAGE *getcore(IMAGE *im, float size, float edu, int sqedt_type)
 {
-  IMAGE *imsqedt, *edt;
-
-  imsqedt=(IMAGE *)sqedt(im, sqedt_type);
-
-  if (sqedt_type == t_UINT32 ){
-    uint32_to_float(imsqedt);
-    imsqrt(imsqedt);
-    edt=imsqedt;
-    f_threshstrict(edt, (float) (size*edu), MIALFLOAT_MAX, (float)0.0, (float)1.0);
-  }
-  else{
-    uint64_to_double(imsqedt);
-    imsqrt(imsqedt);
-    edt=imsqedt;
-    d_threshstrict(edt, (double) (size*edu), DOUBLE_MAX, (double)0.0, (double)1.0);
-  }
-
-  to_uchar(edt);
-
-  return(edt);
+  return uc_sqedt_band(im, (float)(size*edu), 1, sqedt_type);
 }
 
 IMAGE *getpatch(IMAGE *im, float size, int graphfg, float edu, int sqedt_type)

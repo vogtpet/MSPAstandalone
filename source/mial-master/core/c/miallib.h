@@ -479,6 +479,7 @@ extern ERROR_TYPE i32_thresh(IMAGE *, INT32, INT32, INT32, INT32);
 
 /* efedt.c */
 extern IMAGE *sqedt(IMAGE *, int);
+extern IMAGE *uc_sqedt_band(IMAGE *, float, int, int);
 extern IMAGE *iz(IMAGE *);
 
 /* ced.c */

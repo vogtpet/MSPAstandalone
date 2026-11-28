@@ -190,10 +190,7 @@ static inline void loadBar(int x, int n, int r, int w)
 
 IMAGE *getexternalboundary(IMAGE *im, float size, float edu)
 {
-  IMAGE *nim, *imsqedt, *edt;
-#ifdef DEBUG
-  char aname[256];
-#endif
+  IMAGE *nim, *edt;
   int sqedt_type;
 
   nim=(IMAGE *)copy_image(im);
@@ -204,33 +201,12 @@ IMAGE *getexternalboundary(IMAGE *im, float size, float edu)
   else
    sqedt_type = t_UINT32;
 
-  imsqedt=(IMAGE *)sqedt(nim, sqedt_type);
-
-#ifdef DEBUG_EDT
-  printf("hello in getexternalboundary\n");
-  sprintf(aname, "imsqedt_%d.tif", edt_counter);
-  writeTiffOneStripPerLine(imsqedt, aname, NULL);
-  edt_counter +=1;
-#endif
-
-  if (sqedt_type == t_UINT32 ){
-    uint32_to_float(imsqedt);
-    imsqrt(imsqedt);
-    edt=imsqedt;
-    f_thresh(edt, 0.0,  size*edu, 0.0, 1.0);
-  }
-  else{
-    uint64_to_double(imsqedt);
-    imsqrt(imsqedt);
-    edt=imsqedt;
-    d_thresh(edt, 0.0,  size*edu, 0.0, 1.0);
-  }
-
-  to_uchar(edt);
-  bitwise_op(edt, nim, AND_op);
+  edt=uc_sqedt_band(nim, (float)(size*edu), 0, sqedt_type);
+  if (edt != NULL)
+    bitwise_op(edt, nim, AND_op);
 
   free_image(nim);
-  
+
   return(edt);
 }
 
@@ -424,7 +400,6 @@ IMAGE *fm_preproc2(IMAGE *im, int size)
 
 IMAGE *getcore(IMAGE *im, float size, float edu)
 {
-  IMAGE *imsqedt, *edt;
   int sqedt_type;
 
   if ( (im->nx > 65535) || (im->ny > 65535) )
@@ -432,27 +407,10 @@ IMAGE *getcore(IMAGE *im, float size, float edu)
   else
    sqedt_type = t_UINT32;
 
-  imsqedt=(IMAGE *)sqedt(im, sqedt_type);
-
-  if (sqedt_type == t_UINT32 ){
-    uint32_to_float(imsqedt);
-    imsqrt(imsqedt);
-    edt=imsqedt;
-    f_threshstrict(edt, (float) (size*edu), MIALFLOAT_MAX, (float)0.0, (float)1.0);
-  }
-  else{
-    uint64_to_double(imsqedt);
-    imsqrt(imsqedt);
-    edt=imsqedt;
-    d_threshstrict(edt, (double) (size*edu), DOUBLE_MAX, (double)0.0, (double)1.0);
-  }
-
-  to_uchar(edt);
-
-  return(edt);
+  return uc_sqedt_band(im, (float)(size*edu), 1, sqedt_type);
 }
 
-IMAGE *getpatch(IMAGE *im, float size, int graphfg, float edu)
+IMAGE *getpatch(IMAGE *im, float size, int graphfg, float edu, IMAGE *core_in)
 {
   IMAGE *core;
 
@@ -461,7 +419,9 @@ IMAGE *getpatch(IMAGE *im, float size, int graphfg, float edu)
 /* 		  graphfg) */
 /* 	) */
 /*   ) */
-  core=getcore(im, size, edu);
+  core = (core_in != NULL) ? copy_image(core_in) : getcore(im, size, edu);
+  if (core == NULL)
+    return NULL;
   rdil(core, im, graphfg, 1);
   arith(core, im, SUBSWAP_op);
 
@@ -488,7 +448,8 @@ IMAGE *uc_fillhole(IMAGE *im, int graph)
   return marker;
 }
 
-IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int disk)
+IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu,
+                int disk, IMAGE *core_in, IMAGE *outer_in)
 {
   IMAGE **iml;
   IMAGE *core, *outer, *corefill, *loecher, *edges;
@@ -506,7 +467,9 @@ IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int
   int counter=0;
 #endif
 
-  core=getcore(im, size, edu);
+  core = (core_in != NULL) ? copy_image(core_in) : getcore(im, size, edu);
+  if (core == NULL)
+    return NULL;
 
   if (disk==1)
     writeTiffOneStripPerLine(core, mspa_tmp_path[MSPA_TMP_DISK_CORE1], NULL);
@@ -590,7 +553,16 @@ IMAGE **setedges(IMAGE *im, float size, int graphfg, int graphbg, float edu, int
 
   if(disk==1)
     core1=mspa_read_tmp(MSPA_TMP_DISK_CORE1);
-  outer=getexternalboundary(core1, size, edu);
+  outer = (outer_in != NULL) ? copy_image(outer_in)
+                             : getexternalboundary(core1, size, edu);
+  if (outer == NULL){
+    free_image(core);
+    free_image(corefill);
+    free_image(loecher);
+    free_image(core1);
+    free(iml);
+    return NULL;
+  }
 
   negation(core1);
   bitwise_op(edges, core1, AND_op);
@@ -780,6 +752,7 @@ int fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk,
   IMAGE *im, *i0, *core, *patch;
   IMAGE *allHoles, *coreHoles;
   IMAGE *opening, *edges, *perforation, *residues;
+  IMAGE *outer;
   IMAGE *connector, *shortcut, *corridor;
   IMAGE **iml;
   IMAGE *tmp, *tmp2;
@@ -880,7 +853,7 @@ int fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk,
 #endif
 
   //(setq patch (*getpatch i0 size graphfg))
-  patch=getpatch(i0, size, graphfg, edu);
+  patch=getpatch(i0, size, graphfg, edu, core);
 
 #ifdef DEBUG
   printf("hello 4 in fsp\n");
@@ -890,7 +863,8 @@ int fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk,
   loadBar(16, 100, 100, 50);
   // (setq outer (*getexternalboundary core size))
   // (setq opening (*add outer core))
-  opening=getexternalboundary(core, size, edu);
+  outer=getexternalboundary(core, size, edu);
+  opening=copy_image(outer);
   arith(opening, core, ADD_op);
 
 
@@ -915,7 +889,10 @@ int fsp(char fnin[], char fnout[], float size, int graphfg, float edu, int disk,
   }
 
   loadBar(20, 100, 100, 50);
-  iml=setedges(i0, size, graphfg, graphbg, edu, disk);
+  /* The disk path frees core above; let setedges recompute it there. */
+  iml=setedges(i0, size, graphfg, graphbg, edu, disk,
+               (disk==1) ? NULL : core, outer);
+  free_image(outer);
   loadBar(42, 100, 100, 50);
 
   edges=iml[0];

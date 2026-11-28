@@ -135,13 +135,14 @@ IMAGE *ucu32_sqedt(IMAGE *im)
 
   /* scans 3 and 4 */
 #ifdef OPENMP
-#pragma omp parallel for private(t,s,yxm,q,x,sep,w)
-#endif
-  for (y=0; y<n; y++){
-#ifdef OPENMP
+#pragma omp parallel private(t,s,yxm,q,x,sep,w)
+  {
+    /* Per-thread scratch: allocating these once per row was a major cost. */
     t = (INT64 *)calloc(sizeof(INT64), m);
     s = (INT64 *)calloc(sizeof(INT64), m);
+#pragma omp for
 #endif
+  for (y=0; y<n; y++){
     yxm=y*m;
     q=0;
     s[0]=0;
@@ -168,10 +169,11 @@ IMAGE *ucu32_sqedt(IMAGE *im)
       if( x==t[q] )
 	q--;
     }
-#ifdef OPENMP
-  free(s); free(t);
-#endif
   }
+#ifdef OPENMP
+    free(s); free(t);
+  }
+#endif
 
 #ifndef OPENMP
   free(s); free(t);
@@ -265,13 +267,14 @@ IMAGE *ucu64_sqedt(IMAGE *im)
 
   /* scans 3 and 4 */
 #ifdef OPENMP
-#pragma omp parallel for private(t,s,yxm,q,x,sep,w)
-#endif
-  for (y=0; y<n; y++){
-#ifdef OPENMP
+#pragma omp parallel private(t,s,yxm,q,x,sep,w)
+  {
+    /* Per-thread scratch: allocating these once per row was a major cost. */
     t = (INT64 *)calloc(sizeof(INT64), m);
     s = (INT64 *)calloc(sizeof(INT64), m);
+#pragma omp for
 #endif
+  for (y=0; y<n; y++){
     yxm=y*m;
     q=0;
     s[0]=0;
@@ -298,10 +301,11 @@ IMAGE *ucu64_sqedt(IMAGE *im)
       if( x==t[q] )
 	q--;
     }
-#ifdef OPENMP
-  free(s); free(t);
-#endif
   }
+#ifdef OPENMP
+    free(s); free(t);
+  }
+#endif
 
 #ifndef OPENMP
   free(s); free(t);
@@ -316,6 +320,146 @@ IMAGE *ucu64_sqedt(IMAGE *im)
 #undef t_DTYPE
 #undef GTYPE_MAX
 #include "uc_undef.h"
+
+
+/*
+ * Thresholded exact EDT for UCHAR binary images.
+ *
+ * Reproduces ucu32_sqedt/ucu64_sqedt exactly, including the int64/uint64
+ * arithmetic and the float32 (uint32 mode) or double (uint64 mode) square
+ * root and comparison, but writes only the final 0/1 mask.  This avoids a
+ * full-size distance image and the uint32_to_float/uint64_to_double,
+ * imsqrt, *_thresh and to_uchar passes used by getcore().
+ *
+ * strict == 1: threshold < dist < MIALFLOAT_MAX/DOUBLE_MAX  (getcore)
+ * strict == 0: 0 <= dist <= threshold                       (external boundary)
+ */
+IMAGE *uc_sqedt_band(IMAGE *im, float threshold, int strict, int sqedt_type)
+{
+  IMAGE *img, *imdt;
+  UCHAR *b, *pout;
+  UINT32 *g, bigval;
+  INT64 *t, *s;
+  INT64 x, y, w, m, n, q, sep;
+  UINT64 offset, yxm, dt;
+  UINT32 dt32;
+  int use64;
+
+  if (GetImDataType(im) != t_UCHAR)
+    return NULL;
+  use64 = (sqedt_type == t_UINT64);
+
+  m = GetImNx(im);
+  n = GetImNy(im);
+
+  img = create_image(t_UINT32, GetImNx(im), GetImNy(im), GetImNz(im));
+  if (img == NULL)
+    return NULL;
+  imdt = create_image(t_UCHAR, GetImNx(im), GetImNy(im), GetImNz(im));
+  if (imdt == NULL){
+    free_image(img);
+    return NULL;
+  }
+
+  bigval = (UINT32)(UINT32_MAX / 2);
+  b = (UCHAR *)GetImPtr(im);
+  g = (UINT32 *)GetImPtr(img);
+  pout = (UCHAR *)GetImPtr(imdt);
+
+  /* scans 1 and 2: vertical distance to the nearest background pixel */
+#ifdef OPENMP
+#pragma omp parallel for private(x,offset,y)
+#endif
+  for (x=0; x<m; x++){
+    if (b[x] == 0)
+      g[x] = 0;
+    else
+      g[x] = bigval;
+    for (y=1; y<n; y++){
+      offset = (UINT64)x + (UINT64)y * (UINT64)m;
+      if (b[offset] == 0)
+	g[offset] = 0;
+      else
+	g[offset] = 1 + g[offset - (UINT64)m];
+    }
+    for (y=n-2; y>=0; y--){
+      offset = (UINT64)x + (UINT64)y * (UINT64)m;
+      if (g[offset + (UINT64)m] < g[offset])
+	g[offset] = 1 + g[offset + (UINT64)m];
+    }
+  }
+
+  /* scans 3 and 4: horizontal envelope + exact sqrt/threshold */
+  t = NULL;
+  s = NULL;
+#ifndef OPENMP
+  t = (INT64 *)calloc(sizeof(INT64), m);
+  s = (INT64 *)calloc(sizeof(INT64), m);
+#endif
+#ifdef OPENMP
+#pragma omp parallel private(t,s,x,y,w,q,sep,offset,yxm,dt,dt32)
+  {
+    t = (INT64 *)calloc(sizeof(INT64), m);
+    s = (INT64 *)calloc(sizeof(INT64), m);
+#pragma omp for
+#endif
+  for (y=0; y<n; y++){
+    yxm = (UINT64)y * (UINT64)m;
+    q = 0;
+    s[0] = 0;
+    t[0] = 0;
+    for (x=1; x<m; x++){
+      while ( (q>=0) && (NORMU(t[q]-s[q], g[s[q]+yxm]) > NORMU(t[q]-x, g[x+yxm])) )
+	q--;
+      if (q<0){
+	q=0;
+	s[0]=x;
+      }
+      else{
+	sep=(SQU(x)-SQU(s[q])+SQU(g[x+yxm])-SQU(g[s[q]+yxm])) / (2*(x-s[q]));
+	w=1+sep;
+	if (w<m){
+	  q++;
+	  s[q]=x;
+	  t[q]=w;
+	}
+      }
+    }
+    for (x=m-1; x>=0; x--){
+      dt = NORMU(x-s[q], g[s[q]+yxm]);
+      if (use64){
+	double d = sqrt((double)dt);
+	if (strict)
+	  pout[x+yxm] = (d > (double)threshold && d < DOUBLE_MAX) ? 1 : 0;
+	else
+	  pout[x+yxm] = (d >= 0.0 && d <= (double)threshold) ? 1 : 0;
+      }
+      else{
+	dt32 = (UINT32)dt;
+	float d = (float)sqrt((double)dt32);
+	if (strict)
+	  pout[x+yxm] = (d > threshold && d < MIALFLOAT_MAX) ? 1 : 0;
+	else
+	  pout[x+yxm] = (d >= 0.0f && d <= threshold) ? 1 : 0;
+      }
+      if (x==t[q])
+	q--;
+    }
+  }
+#ifdef OPENMP
+    free(s);
+    free(t);
+  }
+#endif
+#ifndef OPENMP
+  free(s);
+  free(t);
+#endif
+
+  free_image(img);
+  return imdt;
+}
+
 
 IMAGE *sqedt(IMAGE *im, int out_type)
 {
