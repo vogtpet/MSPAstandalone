@@ -39,8 +39,8 @@ The image below illustrates the MSPA segmentation procedure of a binary mask:
 
 | Target        | Operating system            | CPU        | Toolchain                     |
 |---------------|-----------------------------|------------|-------------------------------|
-| `Linux`       | Linux (glibc, e.g. Debian 13) | x86_64   | GCC (distribution packages)   |
-| `Linux_ARM`   | Linux (glibc, e.g. Debian 13) | aarch64  | GCC (distribution packages)   |
+| `Linux`       | Linux (glibc 2.35+, built on Ubuntu 22.04) | x86_64   | GCC (distribution packages)   |
+| `Linux_ARM`   | Linux (glibc 2.35+, built on Ubuntu 22.04) | aarch64  | GCC (distribution packages)   |
 | `macOS_ARM`   | macOS (Apple Silicon)       | Apple Silicon | Homebrew GCC (auto-detected) |
 | `Windows`     | Windows 10/11               | x86_64     | MSYS2 UCRT64 (GCC)            |
 | `Windows_ARM` | Windows 11                  | ARM64      | MSYS2 CLANGARM64 (Clang)      |
@@ -61,14 +61,14 @@ Prebuilt binaries are attached to the
 
 | Archive | Platform |
 |---|---|
-| [mspa-2.4.1-linux-x86_64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-linux-x86_64.tar.gz) | Linux x86_64 |
-| [mspa-2.4.1-linux-x86_64-glibc2.31.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-linux-x86_64-glibc2.31.tar.gz) | Linux x86_64, older glibc (Debian 11 build) |
-| [mspa-2.4.1-linux-aarch64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-linux-aarch64.tar.gz) | Linux aarch64 / ARM64 |
-| [mspa-2.4.1-macos-arm64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-macos-arm64.tar.gz) | macOS Apple Silicon |
-| [mspa-2.4.1-windows-x86_64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-windows-x86_64.zip) | Windows x86_64 |
-| [mspa-2.4.1-windows-arm64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/mspa-2.4.1-windows-arm64.zip) | Windows ARM64 |
+| [mspa-2.4.2-linux-x86_64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.2/mspa-2.4.2-linux-x86_64.tar.gz) | Linux x86_64 (glibc 2.35+, Ubuntu 22.04 build) |
+| [mspa-2.4.2-linux-x86_64-glibc2.31.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.2/mspa-2.4.2-linux-x86_64-glibc2.31.tar.gz) | Linux x86_64, older glibc (Debian 11 build) |
+| [mspa-2.4.2-linux-aarch64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.2/mspa-2.4.2-linux-aarch64.tar.gz) | Linux aarch64 / ARM64 (glibc 2.35+) |
+| [mspa-2.4.2-macos-arm64.tar.gz](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.2/mspa-2.4.2-macos-arm64.tar.gz) | macOS Apple Silicon |
+| [mspa-2.4.2-windows-x86_64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.2/mspa-2.4.2-windows-x86_64.zip) | Windows x86_64 |
+| [mspa-2.4.2-windows-arm64.zip](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.2/mspa-2.4.2-windows-arm64.zip) | Windows ARM64 |
 
-Every release also includes a [`SHA256SUMS`](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.1/SHA256SUMS) file:
+Every release also includes a [`SHA256SUMS`](https://github.com/vogtpet/MSPAstandalone/releases/download/v2.4.2/SHA256SUMS) file:
 
 ```sh
 sha256sum -c SHA256SUMS       # Linux
@@ -80,17 +80,21 @@ On Windows, check a file with `certutil -hashfile <file> SHA256`.
 Every archive also contains the current `MSPA_Guide.pdf`, downloaded from the
 JRC MSPA page when the release is packaged.
 
-The `v2.4.1` release is a packaging update: the engine is still **2.4**, the
-macOS binary was rebuilt with a **macOS 11** deployment target, and the guide
-was refreshed.
+The `v2.4.2` release contains the optimized C implementation. The MSPA
+engine is still **2.4** and the output is pixel-identical to the archived
+baseline (`c-baseline-v2.4`). On a 32.5 Gpx test map the optimized code was
+about 20% faster and reduced the measured peak-RAM factor from about 21× to
+about 18× the uncompressed input size. The `v2.4.1` release remains available
+for the previous C implementation, and the original C source is archived at
+tag `c-baseline-v2.4` (see [`source/ARCHIVE.md`](source/ARCHIVE.md)).
 
-The default Linux binaries are built on Debian 13 and require **glibc 2.41 or
-newer**. The extra `...-glibc2.31.tar.gz` archive is built on Debian 11 and
-requires only **glibc 2.31 or newer**; use it on older distributions (for
-example Ubuntu 20.04/22.04 or Debian 11) where the default binary would report
-a GLIBC version error. It produces identical MSPA output. For other
-architectures, build from source on an older distribution; see
-[Building](#building).
+The default Linux x86_64 binary is now built on **Ubuntu 22.04** and requires
+**glibc 2.35 or newer**; this covers Ubuntu 22.04/24.04 and Debian 12/13. The
+extra `...-glibc2.31.tar.gz` archive is built on Debian 11 and requires only
+**glibc 2.31 or newer** for older systems. The Linux aarch64 archive is built
+on Ubuntu 22.04 and requires glibc 2.35 or newer. All variants produce
+identical MSPA output. For other architectures, build from source on an older
+distribution; see [Building](#building).
 
 The macOS archive contains a single, self-contained executable: `libdeflate`
 and `Lerc` are linked statically, so there are no dynamic libraries to keep
@@ -101,7 +105,7 @@ downloaded files. After extracting the archive, clear the quarantine from the
 whole folder and run it:
 
 ```sh
-cd mspa-2.4.1-macos-arm64
+cd mspa-2.4.2-macos-arm64
 xattr -cr .
 ./mspa_macOS_ARM -help
 ```
@@ -171,9 +175,9 @@ the MSPA class codes listed above.
 
 ## Tested on
 
-* **Linux x86_64** – built on Debian 13; the Debian 11 build (glibc 2.31) was
-  tested on Debian, Ubuntu, Fedora and openSUSE
-* **Linux aarch64** – Debian 13 (native and CI)
+* **Linux x86_64** – built on Ubuntu 22.04; the Debian 11 build (glibc 2.31)
+  was tested on Debian, Ubuntu, Fedora and openSUSE
+* **Linux aarch64** – Ubuntu 22.04 (native and CI)
 * **macOS ARM64** – Apple Silicon with Homebrew GCC
 * **Windows x86_64** – Windows 10/11 with MSYS2 UCRT64
 * **Windows ARM64** – Windows 11 with MSYS2 CLANGARM64
@@ -191,6 +195,7 @@ source/                 all files needed to build and test MSPA
   Makefile_Windows
   Makefile_Windows_ARM
   deploy.sh             builds the library, the binary and the distribution
+  ARCHIVE.md            archived original C implementation (tag c-baseline-v2.4)
   corridor_lightmemt.c  MSPA driver (legacy name; referred to as fsp.c)
   frag.c / frag.h       command line handling
   mia_parse.c / .h      generic argument parser
@@ -229,16 +234,21 @@ All files needed to build and test MSPA are in [`source/`](source/) — the make
 
 ### Linux x86_64 and Linux aarch64
 
-Use Debian 13 (or a distribution with the same or a newer glibc) because the
-static libraries needed for linking are available as distribution packages:
+Use Ubuntu 22.04 (glibc 2.35) for the portable release build, or Debian 11
+(glibc 2.31) for the widest compatibility.  The static libraries needed for
+linking are available as distribution packages:
 
 ```sh
 sudo apt update
 sudo apt install build-essential gcc g++ make libgomp1 \
     libtiff-dev libdeflate-dev libpng-dev libwebp-dev libjpeg-dev \
-    libjbig-dev liblerc-dev libsharpyuv-dev libzstd-dev \
+    libjbig-dev liblerc-dev libzstd-dev \
     liblzma-dev zlib1g-dev
 ```
+
+`libsharpyuv-dev` is optional.  The makefiles link it automatically when it
+is present; Ubuntu 22.04 and Debian 11 do not ship a separate static
+`libsharpyuv` and the build works without it.
 
 Then run one of:
 
@@ -247,10 +257,11 @@ Then run one of:
 ./source/deploy.sh Linux_ARM
 ```
 
-The Linux binaries are dynamically linked against the system C library. A
-binary built on Debian 13 (glibc 2.41) runs on distributions with glibc 2.41
-or newer. Build on an older distribution if you need to support older
-systems.
+The Linux binaries are dynamically linked against the system C library. The
+official release is built on Ubuntu 22.04 (glibc 2.35) and runs on
+distributions with glibc 2.35 or newer; the Debian 11 compatibility build
+requires only glibc 2.31. Build on an older distribution if you need to
+support even older systems.
 
 ### MS-Windows x86_64 (MSYS2 UCRT64)
 
@@ -395,9 +406,11 @@ the header, and optionally a memory-mapped temp directory; it exits non-zero
 if neither the in-memory nor the memmap mode is likely to fit. See
 [`python/preflight.py`](python/preflight.py).
 
-See [`python/README.md`](python/README.md) for usage, the class-code table and
-performance measurements (faster than C in the 1000²-8000² benchmarks, with
-about 1.4-2.2x C's peak RAM).
+See [`python/README.md`](python/README.md) for usage and the class-code table.
+The Python engine remains an alternative, but since `v2.4.2` the optimized C
+binary is faster and uses less memory on large maps.  The older
+Python-vs-C benchmark table in `python/README.md` predates the C
+optimization.
 
 ## Continuous integration
 
@@ -407,7 +420,7 @@ directory as a workflow artifact:
 
 | Job | Runner |
 |-----|--------|
-| `Linux` | `ubuntu-24.04` |
+| `Linux` | `ubuntu-22.04` |
 | `Linux_ARM` | `ubuntu-24.04-arm` |
 | `Windows` | `windows-2025` (MSYS2 UCRT64) |
 | `Windows_ARM` | `windows-11-arm` (MSYS2 CLANGARM64) |

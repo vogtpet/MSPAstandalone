@@ -14,7 +14,7 @@ authors:
     given-names: Peter
     affiliation: "European Commission, Joint Research Centre (JRC)"
 version: "2.4"
-date-released: "2026-11-13"
+date-released: "2026-11-28"
 license: "GPL-3.0-or-later"
 repository-code: "https://github.com/vogtpet/MSPAstandalone"
 url: "https://github.com/vogtpet/MSPAstandalone"

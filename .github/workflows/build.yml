@@ -21,7 +21,7 @@ jobs:
       matrix:
         include:
           - target: Linux
-            os: ubuntu-24.04
+            os: ubuntu-22.04
           - target: Linux_ARM
             os: ubuntu-24.04-arm
           - target: Windows
@@ -78,7 +78,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential gcc g++ make libgomp1 file \
             libtiff-dev libdeflate-dev libpng-dev libwebp-dev libjpeg-dev \
-            libjbig-dev liblerc-dev libsharpyuv-dev libzstd-dev \
+            libjbig-dev liblerc-dev libzstd-dev \
             liblzma-dev zlib1g-dev
 
       - name: Install dependencies (macOS)

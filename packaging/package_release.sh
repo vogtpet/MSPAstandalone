@@ -7,6 +7,7 @@
 #   <version> is the release version without the leading "v", e.g. 2.4.
 #
 # The five mspa_dist_* directories must be present in the source/ directory.
+# Optionally, source/mspa_dist_linux_glibc231 adds the Debian 11 build.
 # They are created by ./source/deploy.sh <target> on the respective machines and
 # are ignored by git. The script creates release/mspa-<version>/ with one
 # archive per platform and a SHA256SUMS file.
@@ -76,6 +77,10 @@ entries=(
     "windows-x86_64:source/mspa_dist_windows"
     "windows-arm64:source/mspa_dist_windows_ARM"
 )
+# Optional Debian 11 compatibility build (glibc 2.31).
+if [ -d "source/mspa_dist_linux_glibc231" ]; then
+    entries+=("linux-x86_64-glibc2.31:source/mspa_dist_linux_glibc231")
+fi
 
 echo "Packaging MSPA $version"
 

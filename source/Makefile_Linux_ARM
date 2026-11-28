@@ -20,9 +20,14 @@ CFLAGS = -std=c99 -O2 -Wall -fopenmp \
 
 LDFLAGS = -O2 -fopenmp -static-libgcc -s
 
+# Ubuntu 22.04 and Debian 11 do not ship the separate libsharpyuv static
+# library.  It is only needed for WebP encoding, which MSPA does not use, so
+# link it only when the toolchain actually provides it.
+SHARPYUV_LIB := $(shell f="$$($(CC) -print-file-name=libsharpyuv.a)"; test -f "$$f" && echo -lsharpyuv)
+
 LDLIBS = -Wl,--whole-archive libmiallib_mspa.a -Wl,--no-whole-archive \
          -Wl,-Bstatic \
-         -ltiff -lpng -lwebp -ljpeg -ljbig -lLerc -lsharpyuv \
+         -ltiff -lpng -lwebp -ljpeg -ljbig -lLerc $(SHARPYUV_LIB) \
          -ldeflate -lz -lzstd -llzma -lgomp -lstdc++ \
          -Wl,-Bdynamic \
          -lpthread -lm -ldl -lc

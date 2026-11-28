@@ -159,8 +159,9 @@ VERDICT:            DO NOT PROCEED
 ```
 
 The in-memory engine therefore cannot process that map on an 8 TB machine,
-even though the C binary (roughly 20 bytes/pixel) fits.  Running the preflight
-first avoids loading hundreds of GB and failing days later.
+even though the optimized C binary (about 18 bytes/pixel on the validated
+32.5 Gpx run) fits.  Running the preflight first avoids loading hundreds of GB
+and failing days later.
 
 With a sufficiently large scratch disk, add `--memmap-dir`:
 
@@ -399,6 +400,10 @@ For normal maps, the default in-RAM path remains faster.
 
 ## Performance
 
+**Note:** these C timings predate the optimized C implementation released in
+`v2.4.2`.  The optimized C build is faster than the figures shown here and
+uses less peak RAM; the table is retained as a Python performance baseline.
+
 The numbers below were measured on the same Linux x86_64 host (16 vCPU),
 using a warm Numba cache.  C was run with `OMP_NUM_THREADS=16`; Python with
 16 threads.  Inputs were 8-bit MSPA rasters with blob-like foreground
@@ -423,8 +428,9 @@ processes reuse the Numba cache.
 | 2000 x 2000 | 5.1 s | 102 MB | 2.7 s | 308 MB |
 | 4000 x 4000 | 15.3 s | 335 MB | 9.6 s | 721 MB |
 
-The Python version is now **faster than C in these benchmarks at every size**
-(0.6-0.8x the C time), including 4000² and 8000².  Peak RAM is about
+Against the pre-optimization C build, the Python version is **faster in these
+benchmarks at every size** (0.6-0.8x the C time), including 4000² and 8000².
+Peak RAM is about
 **1.4-2.2x C** for larger rasters (the interpreter baseline dominates at
 1000 x 1000).
 
