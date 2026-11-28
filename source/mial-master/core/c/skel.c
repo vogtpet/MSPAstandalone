@@ -52,7 +52,7 @@ along with miallib.  If not, see <https://www.gnu.org/licenses/>.
 /* replace all addframebox by framebox and commented
    all subframebox calls on 3/5/2006 Pierre */
 
-void getngbshift8 (int shift[9],int nx)
+static void getngbshift8 (int shift[9],int nx)
 {
   /* neighbor shift */
   shift[0] = -1;  /* 4 connected ngbs */
@@ -66,7 +66,7 @@ void getngbshift8 (int shift[9],int nx)
   shift[8] = 0;  /*  central point */
 }
 
-int simple_pixel (PIX_TYPE *pimg, int stype, long int pos, int nx)
+static inline int simple_pixel (PIX_TYPE *pimg, int stype, long int pos, int nx)
 {
   int code;
   int htab[6][256] ={ /* simple g=8, g'=4 */
@@ -187,7 +187,7 @@ int simple_pixel (PIX_TYPE *pimg, int stype, long int pos, int nx)
   else return 0;
 }
 
-int test_anchor (PIX_TYPE *panchor, int atype, long int pos)
+static inline int test_anchor (PIX_TYPE *panchor, int atype, long int pos)
 {
     return ((atype == 0) || (*(panchor + pos)==0));
   /* atype == 0 - we are not using anchor pixels (return 1)
@@ -367,7 +367,7 @@ ERROR_TYPE binODthin_FIFO(IMAGE *imin, int stype, int atype, IMAGE *imanchor)
   return NO_ERROR;
 }
 
-int simple_pair(PIX_TYPE *pimg, int stype, long int pos, int ngbpos, int *sh, int *conftype, int *a, int *b, int *c, int *d)
+static inline int simple_pair(PIX_TYPE *pimg, int stype, long int pos, int ngbpos, int *sh, int *conftype, int *a, int *b, int *c, int *d)
 {
 /* checks if a pixel is independent from its neighbor */
 /*  pimg - image
@@ -424,7 +424,7 @@ int simple_pair(PIX_TYPE *pimg, int stype, long int pos, int ngbpos, int *sh, in
  }
 }
 
-int num_sngb (PIX_TYPE *pimg, long int pos, int *sh, int ngbnum)
+static inline int num_sngb (PIX_TYPE *pimg, long int pos, int *sh, int ngbnum)
 {
     /* returns the number of ngbs higher-equal than a given pixel */
     int i, sum=0;
@@ -434,7 +434,7 @@ int num_sngb (PIX_TYPE *pimg, long int pos, int *sh, int ngbnum)
 }
 
 
-int testsimple (PIX_TYPE *pimg, PIX_TYPE *pimanchor, int atype, int stype, long int pos, int ngbp, int *sh, int nx)
+static inline int testsimple (PIX_TYPE *pimg, PIX_TYPE *pimanchor, int atype, int stype, long int pos, int ngbp, int *sh, int nx)
 {
  if ((test_anchor(pimanchor,atype,pos + ngbp)) && (simple_pixel(pimg,stype,pos + ngbp,nx))
      &&  (*(pimg + pos) == *(pimg + pos + ngbp) )) return 1;
@@ -442,7 +442,7 @@ int testsimple (PIX_TYPE *pimg, PIX_TYPE *pimanchor, int atype, int stype, long 
 }
 
 
-int indep_simple (PIX_TYPE *pimg, PIX_TYPE *pimanchor, int stype, int atype, long int pos, int *sh, int nx)
+static int indep_simple (PIX_TYPE *pimg, PIX_TYPE *pimanchor, int stype, int atype, long int pos, int *sh, int nx)
 {
     int i;
     int allindep = 1;

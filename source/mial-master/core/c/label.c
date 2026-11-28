@@ -134,6 +134,224 @@ ERROR_TYPE generic_label(IMAGE *im1, IMAGE *im2, int ox, int oy, int oz)
 #include "u32_def.h"
 #include <stdint.h> /* Required for uintptr_t */
 
+/* ------------------------------------------------------------------ */
+/* Fast 4/8-connected labelling for the 3x3 structuring elements used  */
+/* by MSPA (label() is also used with arbitrary SEs, so those keep the  */
+/* queue implementation below).  The result is the same partition;     */
+/* only the (arbitrary) label numbers may differ.                      */
+/* ------------------------------------------------------------------ */
+
+typedef struct {
+  INT64 start;
+  INT64 end;             /* inclusive */
+  UINT32 label;
+} U32Run;
+
+static UINT32 u32_uf_find(UINT32 *parent, UINT32 x)
+{
+  UINT32 r = x;
+  while (parent[r] != r)
+    r = parent[r];
+  while (parent[x] != x){
+    UINT32 next = parent[x];
+    parent[x] = r;
+    x = next;
+  }
+  return r;
+}
+
+static void u32_uf_union(UINT32 *parent, unsigned char *rank,
+                         UINT32 a, UINT32 b)
+{
+  UINT32 ra = u32_uf_find(parent, a);
+  UINT32 rb = u32_uf_find(parent, b);
+  if (ra == rb)
+    return;
+  if (rank[ra] < rank[rb]){
+    parent[ra] = rb;
+  }
+  else if (rank[ra] > rank[rb]){
+    parent[rb] = ra;
+  }
+  else{
+    parent[rb] = ra;
+    rank[ra]++;
+  }
+}
+
+/* Returns 4 or 8 for the two MSPA SEs, 0 for any other SE. */
+static int u32_label_fast_se(IMAGE *im2, int ox, int oy, int oz)
+{
+  UCHAR *se;
+  int corners;
+
+  if (GetImDataType(im2) != t_UCHAR ||
+      GetImNx(im2) != 3 || GetImNy(im2) != 3 || GetImNz(im2) != 1 ||
+      ox != 1 || oy != 1 || oz != 0)
+    return 0;
+  se = (UCHAR *)GetImPtr(im2);
+  if (!se[4] || !se[1] || !se[3] || !se[5] || !se[7])
+    return 0;
+  corners = (se[0] != 0) + (se[2] != 0) + (se[6] != 0) + (se[8] != 0);
+  if (corners == 4)
+    return 8;
+  if (corners == 0)
+    return 4;
+  return 0;
+}
+
+/*
+ * Run-length two-pass connected components labelling.
+ *
+ * The image is modified in place: pixels equal to 1 receive provisional
+ * labels, then contiguous final labels starting at 2.  This mirrors the
+ * numbering convention of the queue implementation.  Values other than 0
+ * and 1 make the routine return 2 so the caller can use the generic path.
+ */
+static ERROR_TYPE u32_label_runs(IMAGE *im1, int conn)
+{
+  size_t nx = (size_t)GetImNx(im1);
+  size_t ny = (size_t)GetImNy(im1);
+  size_t npix = nx * ny;
+  UINT32 *p = (UINT32 *)GetImPtr(im1);
+  U32Run *prev, *cur, *tmp;
+  UINT32 *parent, *rootmap, *final;
+  unsigned char *rank;
+  UINT32 pcap = 1024, next = 2, lab, outlab;
+  size_t rcap, i, x, y, pn, cn, k, j, pj;
+  int box[6] = {1, 1, 1, 1, 0, 0};
+
+  if (npix == 0)
+    return NO_ERROR;
+  if (u32_framebox(im1, box, 0) == ERROR)
+    return ERROR;
+
+  /* The generic label path only labels pixels equal to 1. */
+  for (i = 0; i < npix; i++){
+    if (p[i] > 1)
+      return 2;
+  }
+
+  rcap = (nx + 1) / 2 + 2;
+  prev = (U32Run *)malloc(rcap * sizeof(U32Run));
+  cur  = (U32Run *)malloc(rcap * sizeof(U32Run));
+  parent = (UINT32 *)malloc((size_t)pcap * sizeof(UINT32));
+  rank   = (unsigned char *)malloc((size_t)pcap);
+  if (prev == NULL || cur == NULL || parent == NULL || rank == NULL){
+    free(prev); free(cur); free(parent); free(rank);
+    return ERROR;
+  }
+
+  pn = 0;
+  for (y = 0; y < ny; y++){
+    size_t off = y * nx;
+    cn = 0;
+    pj = 0;
+    x = 0;
+    while (x < nx){
+      INT64 s, e;
+      if (p[off + x] != 1){
+        x++;
+        continue;
+      }
+      s = (INT64)x;
+      while (x < nx && p[off + x] == 1)
+        x++;
+      e = (INT64)x - 1;
+
+      if (next == UINT32_MAX){
+        free(prev); free(cur); free(parent); free(rank);
+        return ERROR;
+      }
+      if (next >= pcap){
+        UINT32 ncap = pcap * 2;
+        UINT32 *np;
+        unsigned char *nr;
+        if (ncap <= pcap){
+          free(prev); free(cur); free(parent); free(rank);
+          return ERROR;
+        }
+        np = (UINT32 *)realloc(parent, (size_t)ncap * sizeof(UINT32));
+        if (np == NULL){
+          free(prev); free(cur); free(parent); free(rank);
+          return ERROR;
+        }
+        parent = np;
+        nr = (unsigned char *)realloc(rank, (size_t)ncap);
+        if (nr == NULL){
+          free(prev); free(cur); free(parent); free(rank);
+          return ERROR;
+        }
+        rank = nr;
+        pcap = ncap;
+      }
+      lab = next++;
+      parent[lab] = lab;
+      rank[lab] = 0;
+
+      for (k = (size_t)s; k <= (size_t)e; k++)
+        p[off + k] = lab;
+
+      /* Previous-row runs are sorted; advance past those that end before
+       * this run can connect. */
+      while (pj < pn){
+        if (conn == 4){
+          if (prev[pj].end >= s)
+            break;
+        }
+        else{
+          if (prev[pj].end + 1 >= s)
+            break;
+        }
+        pj++;
+      }
+      for (j = pj; j < pn; j++){
+        int connected;
+        if (conn == 4)
+          connected = (prev[j].start <= e && prev[j].end >= s);
+        else
+          connected = (prev[j].start <= e + 1 && prev[j].end + 1 >= s);
+        if (connected)
+          u32_uf_union(parent, rank, lab, prev[j].label);
+        else if ((conn == 4 && prev[j].start > e) ||
+                 (conn == 8 && prev[j].start > e + 1))
+          break;
+      }
+
+      cur[cn].start = s;
+      cur[cn].end = e;
+      cur[cn].label = lab;
+      cn++;
+    }
+    tmp = prev; prev = cur; cur = tmp;
+    pn = cn;
+  }
+
+  rootmap = (UINT32 *)calloc(next, sizeof(UINT32));
+  final   = (UINT32 *)malloc((size_t)next * sizeof(UINT32));
+  if (rootmap == NULL || final == NULL){
+    free(prev); free(cur); free(parent); free(rank);
+    free(rootmap); free(final);
+    return ERROR;
+  }
+  outlab = 2;
+  for (lab = 2; lab < next; lab++){
+    UINT32 r = u32_uf_find(parent, lab);
+    if (rootmap[r] == 0)
+      rootmap[r] = outlab++;
+    final[lab] = rootmap[r];
+  }
+  for (i = 0; i < npix; i++){
+    UINT32 v = p[i];
+    if (v >= 2)
+      p[i] = final[v];
+  }
+
+  free(prev); free(cur); free(parent); free(rank);
+  free(rootmap); free(final);
+  return NO_ERROR;
+}
+
 ERROR_TYPE u32_label(IMAGE *im1, IMAGE *im2, int ox, int oy, int oz)
 {
   long int  k, *shft, n;
@@ -142,6 +360,13 @@ ERROR_TYPE u32_label(IMAGE *im1, IMAGE *im2, int ox, int oy, int oz)
   FIFO4 *q;
   size_t nx, ny, nz; /* FIXED: Changed to size_t to prevent 32-bit integer overflow */
   int box[BOXELEM];
+  int fast_se = u32_label_fast_se(im2, ox, oy, oz);
+
+  if (fast_se){
+    ERROR_TYPE st = u32_label_runs(im1, fast_se);
+    if (st != 2)
+      return st;
+  }
 
   n = objectpix(im2);
   if (n==ERROR)
